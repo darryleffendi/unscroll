@@ -60,6 +60,10 @@ class CurtainController(private val service: AccessibilityService) {
         shown = bounds
     }
 
+    fun applyTheme(config: Configuration) {
+        view?.applyTheme(config)
+    }
+
     fun hide() {
         val v = view ?: return
         view = null
@@ -96,28 +100,17 @@ class CurtainController(private val service: AccessibilityService) {
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 private class CurtainView(context: Context) : LinearLayout(context) {
-    private val dark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-        Configuration.UI_MODE_NIGHT_YES
-    private val ink = if (dark) 0xFFF5F1E8.toInt() else 0xFF1F2430.toInt()
-    private val muted = if (dark) 0xFFA3A9B6.toInt() else 0xFF5C6270.toInt()
-
     private val badge = ImageView(context).apply {
         setImageResource(R.drawable.ic_launcher_fg)
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(0xFF1F2430.toInt())
-        }
         layoutParams = LayoutParams(dp(64), dp(64)).apply { bottomMargin = dp(18) }
     }
     private val title = TextView(context).apply {
         text = context.getString(R.string.curtain_title)
-        setTextColor(ink)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
         typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         gravity = Gravity.CENTER
     }
     private val message = TextView(context).apply {
-        setTextColor(muted)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         gravity = Gravity.CENTER
         setLineSpacing(0f, 1.2f)
@@ -128,16 +121,33 @@ private class CurtainView(context: Context) : LinearLayout(context) {
         orientation = VERTICAL
         gravity = Gravity.CENTER
         setPadding(dp(32), dp(16), dp(32), dp(16))
-        background = GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            if (dark) intArrayOf(0xFF1B1F27.toInt(), 0xFF232836.toInt()) else intArrayOf(0xFFF7F3EA.toInt(), 0xFFEFE9DC.toInt()),
-        )
         addView(badge)
         addView(title)
         addView(message)
+        applyTheme(context.resources.configuration)
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         // Swallow every touch so the covered content can't scroll or be tapped.
         setOnTouchListener { _, _ -> true }
+    }
+
+    /** Follows the system light/dark setting, including a switch while the curtain is up. */
+    fun applyTheme(config: Configuration) {
+        val dark = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            if (dark) intArrayOf(0xFF111318.toInt(), 0xFF181B22.toInt()) else intArrayOf(0xFFF7F3EA.toInt(), 0xFFEFE9DC.toInt()),
+        )
+        badge.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(if (dark) 0xFF22252E.toInt() else 0xFF1F2430.toInt())
+        }
+        title.setTextColor(if (dark) 0xFFF2F1EE.toInt() else 0xFF1F2430.toInt())
+        message.setTextColor(if (dark) 0xFF8B8F9A.toInt() else 0xFF5C6270.toInt())
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyTheme(newConfig)
     }
 
     fun setMessage(text: String) {

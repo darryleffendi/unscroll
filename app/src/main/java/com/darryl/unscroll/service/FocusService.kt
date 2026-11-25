@@ -111,6 +111,11 @@ class FocusService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (::curtain.isInitialized) curtain.applyTheme(newConfig)
+    }
+
     override fun onUnbind(intent: Intent?): Boolean {
         // Turned off in Accessibility settings (or by the system): say so.
         Log.i(TAG, "service unbound")

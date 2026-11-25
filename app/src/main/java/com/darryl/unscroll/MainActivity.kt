@@ -8,19 +8,16 @@ import android.os.Bundle
 import android.provider.Settings as AndroidSettings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import com.darryl.unscroll.admin.UninstallGuard
 import com.darryl.unscroll.data.SettingsRepository
 import com.darryl.unscroll.data.StoredState
@@ -28,6 +25,7 @@ import com.darryl.unscroll.core.Settings
 import com.darryl.unscroll.service.ProtectionMonitor
 import com.darryl.unscroll.service.ServiceStatus
 import com.darryl.unscroll.ui.SettingsScreen
+import com.darryl.unscroll.ui.UnscrollTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,7 +43,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Always-dark UI: light status/navigation bar icons regardless of the system theme.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -54,10 +56,7 @@ class MainActivity : ComponentActivity() {
         }
         val repo = SettingsRepository(applicationContext)
         setContent {
-            val dark = isSystemInDarkTheme()
-            val colors = if (dark) darkColorScheme(primary = Color(0xFFE07A5F), background = Color(0xFF1B1F27), surface = Color(0xFF1B1F27))
-            else lightColorScheme(primary = Color(0xFFC4573B), background = Color(0xFFF7F3EA), surface = Color(0xFFF7F3EA))
-            MaterialTheme(colorScheme = colors) {
+            UnscrollTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     val stored by repo.state.collectAsState(initial = StoredState(Settings.DEFAULT, null))
                     val status by ServiceStatus.snapshot.collectAsState()
