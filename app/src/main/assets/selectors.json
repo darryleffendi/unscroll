@@ -1,0 +1,83 @@
+{
+  "_readme": "Per app: resource ids (without the 'pkg:id/' prefix) are tried first, then content descriptions (or visible text, matched in memory only). After an app update breaks a rule, capture the screen with tools/capture.sh, fix the ids here, and add the dump as a test fixture. Verified versions are listed per app.",
+
+  "instagram": {
+    "_verified": "457.0.0.55.73",
+    "packages": ["com.instagram.android"],
+    "selectors": {
+      "tab_bar": { "ids": ["tab_bar"] },
+      "home_tab": { "ids": ["feed_tab"], "descs": ["Home"] },
+      "reels_tab": { "ids": ["clips_tab"], "descs": ["Reels"] },
+      "direct_tab": { "ids": ["direct_tab"], "descs": ["Message", "Messages", "Direct"] },
+      "search_tab": { "ids": ["search_tab"], "descs": ["Search and explore"] },
+      "home_header": { "ids": ["action_bar_container"] },
+      "home_logo": { "ids": ["title_logo"] },
+      "stories_tray": { "ids": ["reels_tray_container", "tray_recycler_view", "stories_tray", "overlay_stories_tray_container"] },
+      "story_viewer": { "ids": ["reel_viewer_root"] },
+      "clips_pager": { "ids": ["clips_viewer_view_pager"] },
+      "explore_bar": { "ids": ["explore_action_bar"] },
+      "search_field": { "ids": ["action_bar_search_edit_text"] },
+      "search_result_tabs": { "ids": ["search_tab_bar_layout"] },
+      "search_user_row": { "ids": ["row_search_user_container"] },
+      "direct_inbox": { "ids": ["direct_inbox_action_bar", "inbox_refreshable_thread_list_recyclerview"] },
+      "direct_thread": { "ids": ["thread_fragment_container", "message_list"] },
+      "profile": { "ids": ["user_detail_fragment", "profile_tabs_container", "profile_header_container"] }
+    }
+  },
+
+  "youtube": {
+    "_verified": "21.47.483",
+    "packages": ["com.google.android.youtube"],
+    "selectors": {
+      "pivot_bar": { "ids": ["pivot_bar"] },
+      "pivot_home": { "descs": ["Home"] },
+      "pivot_shorts": { "descs": ["Shorts"] },
+      "feed_tabs": { "ids": ["tabs_bar_view"] },
+      "app_bar": { "ids": ["appbar_layout"] },
+      "search_box": { "ids": ["search_box", "search_query"] },
+      "shorts_player": { "ids": ["reel_watch_fragment_root", "reel_recycler"] },
+      "shorts_pager": { "ids": ["reel_recycler"] },
+      "watch_list": { "ids": ["watch_list"] },
+      "engagement_panel": { "ids": ["engagement_panel"] },
+      "comments_teaser": { "descs": ["Comment...", "Comments", "Add a comment..."] }
+    },
+    "numbers": {
+      "pivot_home_index": 0,
+      "pivot_shorts_index": 1,
+      "watch_metadata_items": 3
+    }
+  },
+
+  "tiktok": {
+    "_verified": "47.9.3 (com.ss.android.ugc.trill)",
+    "_note": "TikTok obfuscates view ids per release; rules are structural. Only stable names belong here.",
+    "packages": ["com.zhiliaoapp.musically", "com.ss.android.ugc.trill"],
+    "selectors": {
+      "video_activity": { "ids": ["DetailActivity"] },
+      "video_page": { "ids": ["long_press_layout"] },
+      "video_pager": { "ids": [] }
+    },
+    "numbers": {
+      "home_tab_index": 0
+    }
+  },
+
+  "x": {
+    "_verified": "UNVERIFIED - X blocks sign-in on the emulator. TODO: capture on a real phone and add ids.",
+    "packages": ["com.twitter.android"],
+    "selectors": {
+      "for_you_tab": { "descs": ["For you"], "texts": ["For you"] },
+      "bottom_nav": { "ids": [] }
+    }
+  },
+
+  "linkedin": {
+    "_verified": "4.1.1276",
+    "packages": ["com.linkedin.android"],
+    "selectors": {
+      "home_tab": { "ids": ["tab_feed"], "descs": ["Home"] },
+      "top_bar": { "ids": ["home_top_bar_container", "app_bar_layout"] },
+      "bottom_bar": { "ids": ["home_bottom_bar"] }
+    }
+  }
+}
