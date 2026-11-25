@@ -48,6 +48,9 @@ class AccessibilityUiNode(private val info: AccessibilityNodeInfo) : UiNode {
         return kids[index]
     }
 
+    override fun findByViewId(fullId: String): List<UiNode> =
+        info.findAccessibilityNodeInfosByViewId(fullId).map(::AccessibilityUiNode)
+
     override fun scrollBackward(): Boolean = info.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
 
     override fun click(): Boolean {

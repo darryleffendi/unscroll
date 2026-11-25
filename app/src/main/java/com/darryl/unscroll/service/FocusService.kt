@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
@@ -37,6 +38,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * One loop per (throttled) event: find the active app window, classify it with that
@@ -51,26 +55,39 @@ class FocusService : AccessibilityService() {
     private val rules: Map<String, AppRules> = RulesRegistry.create()
     private lateinit var curtain: CurtainController
     private lateinit var selectors: Selectors
-    private var settings: Settings = Settings.DEFAULT
+    @Volatile private var settings: Settings = Settings.DEFAULT
 
-    private var foregroundPkg: String? = null
+    /**
+     * Screen reads run here. Each node query waits on the app's UI thread, which stalls
+     * mid-transition; on the main thread that would also stall the curtain and the
+     * tap/Back predictions queued behind it.
+     */
+    private val worker = HandlerThread("unscroll-scan").apply { start() }
+    private val workerHandler = Handler(worker.looper)
+    /** Bumped by every prediction: a scan that started before it is stale when it lands. */
+    private val epoch = AtomicLong()
+    private val evaluateScheduled = AtomicBoolean(false)
+
+    @Volatile private var foregroundPkg: String? = null
     private var foregroundSinceMs = 0L
-    private val windowClasses = HashMap<String, String>()
-    private var viewerIndex: Int? = null
+    private val windowClasses = ConcurrentHashMap<String, String>()
+    @Volatile private var viewerIndex: Int? = null
     private var lastExitMs = 0L
     private var unknownSinceMs = -1L
     private var lastLogged = ""
-    private var evaluateScheduled = false
-    private var lastScreenBounds: Bounds? = null
+    @Volatile private var lastScreenBounds: Bounds? = null
     private var lastNodeCount = -1
     private var lastScrollBackMs = 0L
+    private var lastTapMs = 0L
+    private var lastQuickCheckMs = 0L
+    private var lastScreen: String? = null
     /** Last cover per app screen, for showing it the moment its tab is tapped. */
     private val lastCovers = HashMap<String, Action.Cover>()
     private var dumpReceiver: BroadcastReceiver? = null
     private var setReceiverRef: BroadcastReceiver? = null
 
     private val evaluateTask = Runnable {
-        evaluateScheduled = false
+        evaluateScheduled.set(false)
         safeEvaluate()
     }
 
@@ -79,7 +96,7 @@ class FocusService : AccessibilityService() {
         override fun run() {
             if (foregroundPkg == null) return
             safeEvaluate()
-            handler.postDelayed(this, WATCHDOG_MS)
+            workerHandler.postDelayed(this, WATCHDOG_MS)
         }
     }
 
@@ -116,8 +133,15 @@ class FocusService : AccessibilityService() {
 
     private fun handleEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
+        if (BuildConfig.DEBUG && TRACE_EVENTS) {
+            val src = event.source
+            Log.d(TAG, "event ${AccessibilityEvent.eventTypeToString(event.eventType)} cls=${event.className} " +
+                "src=${src?.viewIdResourceName?.substringAfter("/")} sel=${src?.isSelected} changes=${event.contentChangeTypes} " +
+                "desc=${event.contentDescription} text=${event.text} win=${event.windowId}")
+        }
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED -> if (pkg != null && pkg == foregroundPkg) predictTap(pkg, event)
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> if (pkg != null && pkg == foregroundPkg) predictChange(pkg, event)
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (pkg in TARGET_PACKAGES) {
                 event.className?.let { windowClasses[pkg!!] = it.toString() }
                 viewerIndex = null
@@ -151,6 +175,8 @@ class FocusService : AccessibilityService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        workerHandler.removeCallbacksAndMessages(null)
+        worker.quitSafely()
         scope.cancel()
         if (::curtain.isInitialized) curtain.detach()
         dumpReceiver?.let(::unregisterReceiver)
@@ -169,6 +195,8 @@ class FocusService : AccessibilityService() {
     private fun predictTap(pkg: String, event: AccessibilityEvent) {
         val source = event.source ?: return
         val screen = lastScreenBounds ?: return
+        lastTapMs = SystemClock.uptimeMillis()
+        epoch.incrementAndGet()
         val p = rules[pkg]?.predictTap(AccessibilityUiNode(source), screen, selectors.forPackage(pkg))
         if (BuildConfig.DEBUG) Log.d(TAG, "tap ${source.viewIdResourceName} -> $p")
         when (p) {
@@ -178,15 +206,39 @@ class FocusService : AccessibilityService() {
         }
     }
 
+    /**
+     * Back between main tabs sends no click, only content changes on the tabs. Only
+     * watched on screens the rules ask for, and not right after a tap (already predicted).
+     */
+    private fun predictChange(pkg: String, event: AccessibilityEvent) {
+        val appRules = rules[pkg] ?: return
+        if (!appRules.watchesChangesOn(lastScreen)) return
+        val now = SystemClock.uptimeMillis()
+        if (now - lastTapMs < TAP_SETTLE_MS || now - lastQuickCheckMs < QUICK_CHECK_INTERVAL_MS) return
+        lastQuickCheckMs = now
+        workerHandler.postAtFrontOfQueue {
+            val root = rootInActiveWindow ?: return@postAtFrontOfQueue
+            if (root.packageName?.toString() != pkg) return@postAtFrontOfQueue
+            val p = appRules.quickCheck(AccessibilityUiNode(root), pkg, selectors.forPackage(pkg))
+            if (p == TapPrediction.Unknown) return@postAtFrontOfQueue
+            if (BuildConfig.DEBUG) Log.d(TAG, "quick check -> $p")
+            epoch.incrementAndGet()
+            handler.post {
+                if (p is TapPrediction.Arrives) lastCovers["$pkg/${p.screen}"]?.let { curtain.show(it.bounds, it.message) }
+                else if (p == TapPrediction.Leaves) curtain.hide()
+                schedule(0)
+            }
+        }
+    }
+
     /** Throttle, not debounce: a playing video sends content changes nonstop. */
     private fun schedule(delayMs: Long) {
         if (delayMs == 0L) {
-            handler.removeCallbacks(evaluateTask)
-            evaluateScheduled = true
-            handler.post(evaluateTask)
-        } else if (!evaluateScheduled) {
-            evaluateScheduled = true
-            handler.postDelayed(evaluateTask, delayMs)
+            workerHandler.removeCallbacks(evaluateTask)
+            evaluateScheduled.set(true)
+            workerHandler.post(evaluateTask)
+        } else if (evaluateScheduled.compareAndSet(false, true)) {
+            workerHandler.postDelayed(evaluateTask, delayMs)
         }
     }
 
@@ -199,11 +251,13 @@ class FocusService : AccessibilityService() {
         } catch (e: RuntimeException) {
             Log.w(TAG, "evaluate failed", e)
             CrashLog.record(this, "screen check", e)
-            curtain.hide()
+            handler.post { curtain.hide() }
         }
     }
 
+    /** Runs on the worker; the result is applied on the main thread. */
     private fun evaluate() {
+        val startEpoch = epoch.get()
         val now = SystemClock.uptimeMillis()
         val active = activeAppWindow()
         val appRules = active?.let { rules[it.pkg] }
@@ -216,8 +270,8 @@ class FocusService : AccessibilityService() {
             foregroundPkg = active.pkg
             foregroundSinceMs = now
             viewerIndex = null
-            handler.removeCallbacks(watchdog)
-            handler.postDelayed(watchdog, WATCHDOG_MS)
+            workerHandler.removeCallbacks(watchdog)
+            workerHandler.postDelayed(watchdog, WATCHDOG_MS)
         }
         lastScreenBounds = active.bounds
         val ctx = ScreenContext(
@@ -239,8 +293,11 @@ class FocusService : AccessibilityService() {
             Log.w(TAG, "rules failed for ${active.pkg}", e)
             Decision.unknown()
         }
-        apply(decision, active, now)
         if (BuildConfig.DEBUG) lastNodeCount = ctx.nodesIfBuilt()
+        handler.post {
+            // A prediction since this scan began knows better; rescan instead.
+            if (epoch.get() != startEpoch) schedule(0) else apply(decision, active, SystemClock.uptimeMillis())
+        }
     }
 
     private fun apply(decision: Decision, active: ActiveWindow, now: Long) {
@@ -255,7 +312,7 @@ class FocusService : AccessibilityService() {
                 if (action.scrollBack == null) lastCovers["${active.pkg}/${decision.screen}"] = action
                 else if (now - lastScrollBackMs > SCROLL_BACK_INTERVAL_MS) {
                     lastScrollBackMs = now
-                    action.scrollBack.scrollBackward()
+                    workerHandler.post { action.scrollBack.scrollBackward() }
                     schedule(SCROLL_BACK_INTERVAL_MS)
                 }
             }
@@ -279,22 +336,28 @@ class FocusService : AccessibilityService() {
                 curtain.hide()
                 if (now - lastExitMs > EXIT_COOLDOWN_MS) {
                     lastExitMs = now
-                    if (!action.node.click() && action.label.startsWith("leave")) performGlobalAction(GLOBAL_ACTION_BACK)
+                    workerHandler.post {
+                        if (!action.node.click() && action.label.startsWith("leave")) performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
                 }
             }
         }
         report(active.pkg, decision)
     }
 
+    /** Worker side: drop per-visit state; the curtain itself is touched on the main thread. */
     private fun leaveForeground() {
         foregroundPkg?.let { rules[it]?.reset() }
         foregroundPkg = null
-        handler.removeCallbacks(watchdog)
-        if (::curtain.isInitialized) curtain.hide()
-        report(null, null)
+        workerHandler.removeCallbacks(watchdog)
+        handler.post {
+            if (::curtain.isInitialized) curtain.hide()
+            report(null, null)
+        }
     }
 
     private fun report(pkg: String?, decision: Decision?) {
+        lastScreen = decision?.screen
         val actionName = decision?.action?.let { a ->
             when (a) {
                 is Action.Cover -> "COVER[${a.bounds.top},${a.bounds.bottom}]"
@@ -396,10 +459,14 @@ class FocusService : AccessibilityService() {
         const val ACTION_DUMP = "com.darryl.unscroll.DUMP"
         const val ACTION_SET = "com.darryl.unscroll.SET"
         const val THROTTLE_MS = 40L
+        /** Debug: log every event (noisy). */
+        const val TRACE_EVENTS = false
         const val WATCHDOG_MS = 1_000L
         const val UNKNOWN_GRACE_MS = 300L
         const val EXIT_COOLDOWN_MS = 800L
         const val SCROLL_BACK_INTERVAL_MS = 250L
+        const val TAP_SETTLE_MS = 500L
+        const val QUICK_CHECK_INTERVAL_MS = 60L
         val TARGET_PACKAGES = setOf(
             "com.instagram.android",
             "com.google.android.youtube",

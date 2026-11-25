@@ -20,7 +20,7 @@ class SingleItemSessionTest {
         assertTrue(s.observe("loading", null, 300))
         assertTrue(s.observe("loaded", 0, 800))
         assertTrue(s.observe("loaded", 0, 5_000))
-        assertFalse(s.observe("other", 0, 6_000))
+        assertFalse(s.observe("loaded", 1, 6_000))
     }
 
     @Test fun `first item is allowed and stays allowed`() {
@@ -31,10 +31,17 @@ class SingleItemSessionTest {
         assertTrue(s.observe("a", 3, T))
     }
 
-    @Test fun `a new identity ends the session`() {
+    @Test fun `without a position, a new identity ends the session`() {
         val s = SingleItemSession(warmUpMs = 0)
-        s.observe("a", 0, T)
-        assertFalse(s.observe("b", 0, T))
+        s.observe("a", null, T)
+        assertFalse(s.observe("b", null, T))
+    }
+
+    @Test fun `with a position, descriptions changing mid-play don't end the session`() {
+        val s = SingleItemSession(warmUpMs = 0)
+        s.observe("caption-1", 0, T)
+        assertTrue(s.observe("caption-2", 0, T))
+        assertFalse(s.observe("caption-2", 1, T))
     }
 
     @Test fun `a new pager index ends the session even with the same identity`() {

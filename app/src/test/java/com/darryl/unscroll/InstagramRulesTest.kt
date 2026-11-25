@@ -141,3 +141,16 @@ class InstagramScrolledHomeTest {
         assertEquals(null, (d.action as Action.Cover).scrollBack)
     }
 }
+
+/** Instagram's MainTabActivity layout renamed the header (main_feed_action_bar). */
+class InstagramMainTabLayoutTest {
+    private val pkg = "com.instagram.android"
+
+    @Test fun `new layout - feed covered below the stories, header found for the pull cap`() {
+        val rules = InstagramRules()
+        val ctx = Fixtures.context(pkg, Fixtures.file("instagram", "home", "maintab"), Settings.DEFAULT)
+        assertTrue("header must be found, or pull-to-refresh can expose posts", ctx.has("home_header"))
+        val cover = rules.decide(ctx).action as Action.Cover
+        assertEquals(ctx.find("stories_tray")!!.bounds.bottom, cover.bounds.top)
+    }
+}

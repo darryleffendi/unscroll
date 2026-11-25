@@ -39,6 +39,13 @@ interface UiNode {
     fun child(index: Int): UiNode?
     /** Tap this node (or its nearest clickable ancestor). Returns false when it couldn't. */
     fun click(): Boolean = false
+    /**
+     * Nodes in this subtree with the full resource id ("pkg:id/name"), found by the app
+     * itself in one round trip; null when the backing tree can't search (fixtures). It can
+     * miss containers a walk sees, so only use it for quick checks on known-good ids.
+     */
+    fun findByViewId(fullId: String): List<UiNode>? = null
+
     /** Scroll a scrollable list back by a page. */
     fun scrollBackward(): Boolean = false
 }

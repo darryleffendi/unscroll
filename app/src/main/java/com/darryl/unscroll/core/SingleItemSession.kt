@@ -2,9 +2,9 @@ package com.darryl.unscroll.core
 
 /**
  * "One video at a time": the first item seen in a viewer is allowed, moving to any
- * other item ends the session. An item is recognized by a content identity (digest of
- * its descriptions) and, when the app reports it, the pager index; either changing
- * counts as moving on.
+ * other item ends the session. An item is recognized by its pager position when the app
+ * reports one; only without a position does a content identity (digest of its
+ * descriptions) decide, because descriptions can change while one item plays.
  *
  * For a short warm-up after opening, changes only refine the baseline: the viewer's
  * descriptions fill in as it loads and the pager settles on its starting item.
@@ -31,13 +31,13 @@ class SingleItemSession(private val warmUpMs: Long = WARM_UP_MS) {
             if (index != null) this.index = index
             return true
         }
+        if (index != null) {
+            if (this.index == null) this.index = index
+            return index == this.index
+        }
         if (identity != null) {
             if (this.identity == null) this.identity = identity
             else if (identity != this.identity) return false
-        }
-        if (index != null) {
-            if (this.index == null) this.index = index
-            else if (index != this.index) return false
         }
         return true
     }

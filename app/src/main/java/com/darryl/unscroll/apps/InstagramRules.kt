@@ -28,6 +28,15 @@ class InstagramRules : AppRules {
         else -> TapPrediction.Unknown
     }
 
+    /** On the other main tabs, Back returns to Home: watch for their tab being deselected. */
+    override fun watchesChangesOn(currentScreen: String?) = currentScreen in BACK_TO_HOME_FROM
+
+    override fun quickCheck(root: UiNode, packageName: String, selectors: AppSelectors): TapPrediction {
+        val id = selectors["home_tab"].ids.firstOrNull() ?: return TapPrediction.Unknown
+        val homeTab = root.findByViewId("$packageName:id/$id")?.firstOrNull { it.isVisible } ?: return TapPrediction.Unknown
+        return if (homeTab.isSelectedDeep()) TapPrediction.Arrives(HOME) else TapPrediction.Unknown
+    }
+
     override fun reset() {
         reelSession.reset()
         redirect = RedirectState()
@@ -94,7 +103,9 @@ class InstagramRules : AppRules {
         }
         if (s.isOn(Toggle.IG_BLOCK_REELS_ALL)) return Decision(REEL_VIEWER, Action.Back)
         if (!s.isOn(Toggle.IG_BLOCK_REELS_TAB)) return Decision(REEL_VIEWER, Action.Allow)
-        val sameReel = reelSession.observe(ctx.centerItemIdentity(pager), ctx.centerItemIndex(pager), ctx.nowMs)
+        val identity = ctx.centerItemIdentity(pager)
+        val index = ctx.centerItemIndex(pager)
+        val sameReel = reelSession.observe(identity, index, ctx.nowMs)
         return Decision(REEL_VIEWER, if (sameReel) Action.Allow else Action.Back)
     }
 
@@ -124,7 +135,13 @@ class InstagramRules : AppRules {
             val band = Geometry.band(ctx.screen, top, navTop) ?: return Decision(HOME, Action.Allow)
             return Decision(HOME, Action.Cover(band, "Feed is hidden. Back to stories…", scrollBack = list))
         }
-        lastTrayHeight = maxOf(lastTrayHeight, tray!!.bounds.height)
+        // Learn the tray's height right under the header, keeping the smallest seen: mid
+        // pull-to-refresh it is pushed down or stretched (only ever taller), and a stretched
+        // height would loosen the cap.
+        val h = tray!!.bounds.height
+        val underHeader = headerBottom == null || kotlin.math.abs(tray.bounds.top - headerBottom) <= 8
+        if (lastTrayHeight == 0) lastTrayHeight = h
+        else if (underHeader && h >= MIN_TRAY_HEIGHT) lastTrayHeight = minOf(lastTrayHeight, h)
         // Cap at header + tray height so a pull-to-refresh never exposes a post.
         val cap = headerBottom?.let { it + lastTrayHeight } ?: tray.bounds.bottom
         val top = minOf(tray.bounds.bottom, cap)
@@ -164,6 +181,8 @@ class InstagramRules : AppRules {
         const val STORY = "IG_STORY"
         const val DIRECT = "IG_DIRECT"
         const val PROFILE = "IG_PROFILE"
+
+        private val BACK_TO_HOME_FROM = setOf(DIRECT, PROFILE, EXPLORE, SEARCH, REELS_TAB)
 
         const val REDIRECT_WINDOW_MS = 8_000L
         private const val MIN_TRAY_HEIGHT = 120

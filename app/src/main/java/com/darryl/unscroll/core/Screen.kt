@@ -36,15 +36,21 @@ class ScreenContext(
         map
     }
 
+    /**
+     * Visible nodes with a view id, from the snapshot. Not the app-side id search
+     * (findByViewId): it skips some containers the walk sees, e.g. Instagram's header bar.
+     */
+    private fun visibleById(id: String): List<UiNode> = byId[id].orEmpty()
+
     /** First visible node matching the selector: its ids in order, then its labels. */
     fun find(key: String): UiNode? = cache.getOrPut(key) {
         val selector = selectors[key]
-        for (id in selector.ids) byId[id]?.firstOrNull()?.let { return@getOrPut it }
+        for (id in selector.ids) visibleById(id).firstOrNull()?.let { return@getOrPut it }
         if (selector.descs.isNotEmpty() || selector.texts.isNotEmpty()) nodes.firstOrNull { selector.matchesLabel(it) } else null
     }
 
     /** All visible nodes with one of the selector's ids. */
-    fun findAllById(key: String): List<UiNode> = selectors[key].ids.flatMap { byId[it].orEmpty() }
+    fun findAllById(key: String): List<UiNode> = selectors[key].ids.flatMap { visibleById(it) }
 
     fun has(key: String) = find(key) != null
 
@@ -88,6 +94,15 @@ interface AppRules {
     fun decide(ctx: ScreenContext): Decision
 
     fun predictTap(tapped: UiNode, screen: Bounds, selectors: AppSelectors): TapPrediction = TapPrediction.Unknown
+
+    /** Screens on which [predictChange] wants content-change sources (fetching one is a round trip). */
+    fun watchesChangesOn(currentScreen: String?): Boolean = false
+
+    /**
+     * A cheap check (a couple of id lookups, no walk) run on content changes while on a
+     * watched screen, to catch tab switches that send no click (e.g. Back).
+     */
+    fun quickCheck(root: UiNode, packageName: String, selectors: AppSelectors): TapPrediction = TapPrediction.Unknown
 
     /** The app left the foreground; drop per-visit state. */
     fun reset() {}

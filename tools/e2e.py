@@ -77,6 +77,16 @@ def curtain_now():
     return m is not None and m.group(1) == "0"
 
 
+def curtain_top():
+    """Top edge of the visible curtain window, or None when it's hidden."""
+    out = adb("shell", "dumpsys", "window", "windows")
+    i = out.find("unscroll curtain}:")
+    if i < 0 or not re.search(r"mViewVisibility=0x0\b", out[i:i + 3000]):
+        return None
+    m = re.search(r"mAttrs=\{\((-?\d+),(-?\d+)\)", out[i:])
+    return int(m.group(2)) if m else None
+
+
 def curtain(expected=True, timeout=3):
     """Polls briefly: window add/remove lags the log line. Returns the final state."""
     end = time.time() + timeout
@@ -94,7 +104,7 @@ def check(name, ok, detail=""):
 
 def swipe_next(pattern):
     """Swipes to the next full-screen item; a swipe right after opening sometimes doesn't take."""
-    for _ in range(2):
+    for _ in range(3):
         swipe(540, 1900, 540, 300, 120)
         if wait_line(pattern, 4):
             return True
@@ -118,12 +128,11 @@ def instagram():
     swipe(540, 1500, 540, 600); settle()
     check("feed doesn't scroll under the curtain", ui("has", "reels_tray_container").returncode == 0)
     swipe(540, 450, 540, 1500, 600); time.sleep(0.4)
-    l = last()
-    m = re.search(r"COVER\[(\d+)", l)
-    cover_top = int(m.group(1)) if m else 0
-    posts_above = [ln for ln in ui("ids").stdout.splitlines()
-                   if ln.startswith("row_feed") and int(re.findall(r"\d+", ln.split()[1])[1]) < cover_top]
-    check("pull-to-refresh keeps posts covered", m is not None and not posts_above, f"{l} {posts_above[:1]}")
+    ids = ui("ids").stdout
+    top = curtain_top()  # the curtain's real frame, read right after the dump
+    posts_above = [ln for ln in ids.splitlines()
+                   if ln.startswith("row_feed") and top is not None and int(re.findall(r"\d+", ln.split()[1])[1]) < top]
+    check("pull-to-refresh keeps posts covered", top is not None and not posts_above, f"curtain top={top} {posts_above[:1]}")
     settle(2)
 
     mark(); tap("search_tab")
@@ -146,7 +155,7 @@ def instagram():
     check("Reels tab bounces back to Home", l is not None and wait_line(r"screen=IG_HOME", 6) is not None, last())
 
     mark(); tap("feed_tab"); settle(2)
-    adb("shell", "input", "tap", "410", "400")
+    adb("shell", "input", "tap", "410", "450")
     check("stories open and play", wait_line(r"screen=IG_STORY action=ALLOW") is not None, last())
     adb("shell", "input", "keyevent", "BACK"); settle(1.5)
 
@@ -156,7 +165,9 @@ def instagram():
         launch(pkg); settle(4)
         tap("search_tab"); settle(2)
         tap("action_bar_search_edit_text"); settle(1.5)
-        adb("shell", "input", "text", "nasa"); settle(3)
+        adb("shell", "input", "text", "nasa"); settle(2)
+        # Typed suggestions vary; the submitted results list the top account first.
+        adb("shell", "input", "keyevent", "ENTER"); settle(4)
         tap("row_search_user_username"); settle(4)
         tap("profile_tab_icon_view#1"); settle(3)  # the profile's Reels tab
         return tap("preview_clip_thumbnail")

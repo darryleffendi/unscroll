@@ -11,7 +11,7 @@
       "direct_tab": { "ids": ["direct_tab"], "descs": ["Message", "Messages", "Direct"] },
       "search_tab": { "ids": ["search_tab"], "descs": ["Search and explore"] },
       "profile_tab": { "ids": ["profile_tab"] },
-      "home_header": { "ids": ["action_bar_container"] },
+      "home_header": { "ids": ["main_feed_action_bar", "action_bar_container"] },
       "home_logo": { "ids": ["title_logo"] },
       "home_feed_list": { "ids": ["list"] },
       "stories_tray": { "ids": ["reels_tray_container", "tray_recycler_view", "stories_tray", "overlay_stories_tray_container"] },
