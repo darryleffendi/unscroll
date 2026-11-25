@@ -69,6 +69,7 @@ fun SettingsScreen(
     settings: Settings,
     locked: Boolean,
     status: ServiceStatus.Snapshot,
+    serviceEnabled: Boolean,
     onToggle: (Toggle, Boolean) -> Unit,
     onLock: (String) -> Unit,
     onUnlock: (String) -> Unit,
@@ -85,7 +86,7 @@ fun SettingsScreen(
     ) {
         Text("unscroll", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
 
-        StatusCard(status, onOpenAccessibility)
+        StatusCard(status.connected || serviceEnabled, onOpenAccessibility)
         LockCard(locked, onLock, onUnlock, lockError)
 
         for (section in sections) {
@@ -118,8 +119,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun StatusCard(status: ServiceStatus.Snapshot, onOpenAccessibility: () -> Unit) {
-    val on = status.connected
+private fun StatusCard(on: Boolean, onOpenAccessibility: () -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(

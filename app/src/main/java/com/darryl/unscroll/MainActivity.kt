@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import com.darryl.unscroll.data.SettingsRepository
 import com.darryl.unscroll.data.StoredState
 import com.darryl.unscroll.core.Settings
+import com.darryl.unscroll.service.ProtectionMonitor
 import com.darryl.unscroll.service.ServiceStatus
 import com.darryl.unscroll.ui.SettingsScreen
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    /** Whether the service is switched on in Accessibility settings, refreshed on resume. */
+    private var serviceEnabled by mutableStateOf(false)
+
+    override fun onResume() {
+        super.onResume()
+        serviceEnabled = ProtectionMonitor.isEnabled(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -55,6 +64,7 @@ class MainActivity : ComponentActivity() {
                         settings = stored.settings,
                         locked = stored.locked,
                         status = status,
+                        serviceEnabled = serviceEnabled,
                         onToggle = { t, on -> scope.launch { repo.setToggle(t, on) } },
                         onLock = { pw -> lockError = null; scope.launch { withContext(Dispatchers.Default) { repo.lock(pw) } } },
                         onUnlock = { pw ->
