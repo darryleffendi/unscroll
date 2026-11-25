@@ -3,7 +3,9 @@ package com.darryl.unscroll
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
 import androidx.activity.ComponentActivity
@@ -36,12 +38,14 @@ class MainActivity : ComponentActivity() {
     private var serviceEnabled by mutableStateOf(false)
     private var guardActive by mutableStateOf(false)
     private var lastError by mutableStateOf<String?>(null)
+    private var batteryUnrestricted by mutableStateOf(true)
 
     override fun onResume() {
         super.onResume()
         serviceEnabled = ProtectionMonitor.isEnabled(this)
         guardActive = UninstallGuard.isActive(this)
         lastError = CrashLog.read(this)
+        batteryUnrestricted = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,6 +86,15 @@ class MainActivity : ComponentActivity() {
                         lockError = lockError,
                         onOpenAccessibility = { startActivity(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS)) },
                         lastError = lastError,
+                        batteryUnrestricted = batteryUnrestricted,
+                        onAllowBackground = {
+                            startActivity(
+                                Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")),
+                            )
+                        },
+                        onOpenAppSettings = {
+                            startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                        },
                         onClearError = { CrashLog.clear(this); lastError = null },
                         guardActive = guardActive,
                         onGuardChange = { on ->

@@ -30,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import com.darryl.unscroll.R
 import com.darryl.unscroll.core.Settings
 import com.darryl.unscroll.core.Toggle
 import com.darryl.unscroll.service.ServiceStatus
+import kotlinx.coroutines.delay
 
 private data class Rule(val toggle: Toggle, val title: String, val detail: String)
 private data class AppSection(val name: String, val initial: String, val tint: Color, val rules: List<Rule>, val note: String? = null)
@@ -100,8 +102,24 @@ fun SettingsScreen(
     onGuardChange: (Boolean) -> Unit,
     lastError: String?,
     onClearError: () -> Unit,
+    batteryUnrestricted: Boolean,
+    onAllowBackground: () -> Unit,
+    onOpenAppSettings: () -> Unit,
 ) {
-    val protecting = status.connected || serviceEnabled
+    // The service runs in this process, so "enabled but not connected" means Android
+    // stopped it (e.g. a force-stop from recents) and won't restart it until toggled.
+    // A short grace period covers the moment before it binds after launch.
+    var graceOver by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(2_000)
+        graceOver = true
+    }
+    val protection = when {
+        status.connected -> Protection.ON
+        serviceEnabled && !graceOver -> Protection.ON
+        serviceEnabled -> Protection.STOPPED
+        else -> Protection.OFF
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -111,8 +129,9 @@ fun SettingsScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Header(protecting)
-        StatusCard(protecting, status, onOpenAccessibility)
+        Header(protection)
+        StatusCard(protection, status, onOpenAccessibility)
+        if (!batteryUnrestricted) KeepRunningCard(onAllowBackground, onOpenAppSettings)
         lastError?.let { ErrorCard(it, onClearError) }
         LockCard(locked, onLock, onUnlock, lockError)
 
@@ -140,20 +159,26 @@ fun SettingsScreen(
     }
 }
 
+private enum class Protection { ON, STOPPED, OFF }
+
 @Composable
-private fun Header(protecting: Boolean) {
+private fun Header(protection: Protection) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("unscroll", color = Palette.Ink, fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1).sp)
             Text("Same apps. Less feed.", color = Palette.Muted, fontSize = 14.sp)
         }
-        StatusPill(protecting)
+        StatusPill(protection)
     }
 }
 
 @Composable
-private fun StatusPill(on: Boolean) {
-    val color = if (on) Palette.Green else Palette.Red
+private fun StatusPill(protection: Protection) {
+    val color = when (protection) {
+        Protection.ON -> Palette.Green
+        Protection.STOPPED -> Palette.Amber
+        Protection.OFF -> Palette.Red
+    }
     Row(
         Modifier
             .clip(CircleShape)
@@ -163,13 +188,20 @@ private fun StatusPill(on: Boolean) {
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         Spacer(Modifier.width(8.dp))
-        Text(if (on) "Active" else "Off", color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            when (protection) {
+                Protection.ON -> "Active"
+                Protection.STOPPED -> "Stopped"
+                Protection.OFF -> "Off"
+            },
+            color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun StatusCard(on: Boolean, status: ServiceStatus.Snapshot, onOpenAccessibility: () -> Unit) {
-    if (!on) {
+private fun StatusCard(protection: Protection, status: ServiceStatus.Snapshot, onOpenAccessibility: () -> Unit) {
+    if (protection != Protection.ON) {
+        val stopped = protection == Protection.STOPPED
         Box(
             Modifier
                 .fillMaxWidth()
@@ -178,10 +210,11 @@ private fun StatusCard(on: Boolean, status: ServiceStatus.Snapshot, onOpenAccess
                 .padding(20.dp),
         ) {
             Column {
-                Text("Protection is off", color = Color(0xFF1A0F0B), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(if (stopped) "Protection stopped" else "Protection is off", color = Color(0xFF1A0F0B), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Turn on unscroll in Accessibility settings. Greyed out? Settings › Apps › unscroll › ⋮ › Allow restricted settings.",
+                    if (stopped) "Android stopped unscroll (closing apps from recents does this on some phones). Turn unscroll protection off and on again."
+                    else "Turn on unscroll in Accessibility settings. Greyed out? Settings › Apps › unscroll › ⋮ › Allow restricted settings.",
                     color = Color(0xCC1A0F0B),
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
@@ -209,6 +242,26 @@ private fun StatusCard(on: Boolean, status: ServiceStatus.Snapshot, onOpenAccess
                 Text("Protecting 5 apps", color = Palette.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 val now = status.packageName?.let { "${status.screen} · ${status.action}" } ?: "Waiting for an app"
                 Text(now, color = Palette.Faint, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeepRunningCard(onAllowBackground: () -> Unit, onOpenAppSettings: () -> Unit) {
+    Panel(highlight = Palette.Amber) {
+        Column(Modifier.padding(18.dp)) {
+            Text("Keep unscroll running", color = Palette.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Some phones stop background apps to save battery. Allow unscroll in the background; on OnePlus, OPPO, Xiaomi and Vivo also turn on Auto launch in its app settings.",
+                color = Palette.Muted,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("Allow background", primary = true, onClick = onAllowBackground)
+                PillButton("App settings", primary = false, onClick = onOpenAppSettings)
             }
         }
     }

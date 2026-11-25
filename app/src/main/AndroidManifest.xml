@@ -4,6 +4,7 @@
     <!-- Deliberately no INTERNET permission: the app cannot send anything off the device. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".UnscrollApp"
@@ -16,7 +17,10 @@
 
         <activity
             android:name=".MainActivity"
+            android:excludeFromRecents="true"
             android:exported="true">
+            <!-- Kept out of recents: on ColorOS/MIUI, swiping a recents card force-stops the
+                 whole app, accessibility service included. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
