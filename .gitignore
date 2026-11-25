@@ -9,3 +9,4 @@ kls_database.db
 keystore.properties
 *.jks
 *.keystore
+dist/
