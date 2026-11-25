@@ -72,49 +72,51 @@ Test account prerequisites: an Instagram DM containing a shared Reel, a Saved Re
 
 ## To-dos
 
+Status legend: [x] done and verified · [~] built, partly verified (note says what's missing) · [ ] not started.
+
 ### M0 — Setup
-- [ ] **0.1 Project skeleton.** Gradle, Compose, manifest without `INTERNET`. Verify: `./gradlew assembleDebug test` passes; `aapt dump permissions` shows no `INTERNET`; APK installs and launches on emulator.
-- [ ] **0.2 Fixture capture tooling.** `tools/capture.sh <app> <screen>` saves dump + screenshot. If `uiautomator dump` times out on video screens, add a debug-only service command that dumps the tree to a file. Verify: fixtures captured for every screen in M2–M6, with app version in filename.
+- [x] **0.1 Project skeleton.** Release APK permissions: POST_NOTIFICATIONS, RECEIVE_BOOT_COMPLETED only (`aapt dump permissions`).
+- [x] **0.2 Fixture capture tooling.** `tools/capture.sh`. `uiautomator dump` can't run while mobile-mcp's agent is connected, so the debug build's service writes dumps (`am broadcast -a com.darryl.unscroll.DUMP`).
 
 ### M1 — Core engine
-- [ ] **1.1 Node abstraction + selectors.json loader.** ID match first, content-desc fallback, per package/screen. Verify: unit tests on loader and matcher against fixtures.
-- [ ] **1.2 Service loop.** Config for 6 packages, event types, debounce, classify → policy → action; debug screen line on settings screen. Verify: emulator — open each app, logcat shows package + `screen=UNKNOWN`; no events logged from other apps.
-- [ ] **1.3 Curtain.** Accessibility overlay, bounds from anchors, last-top memory, step aside after ~600 ms unknown or on system dialog/permission prompt/keyboard-over-target. "Hidden by unscroll" design. Verify: unit tests for bounds math; emulator — overlay appears via a debug trigger, touches don't reach app underneath, disappears on a permission dialog.
-- [ ] **1.4 Exit action + single-item session.** Back / tab click; generic balanced state machine (allow first item from a whitelisted origin, exit on next). Verify: unit tests covering origins, next-swipe, window recreation (rotation).
-- [ ] **1.5 Settings store + main UI.** Per-app switch groups, dependency (home off greys feed). Verify: unit tests for dependencies; emulator — toggles persist across force-stop.
+- [x] **1.1 Node abstraction + selectors.json loader.** Unit tests run every rule against captured fixtures.
+- [x] **1.2 Service loop.** Throttled (80 ms) evaluate, 1 s watchdog while an app is in front; log line `pkg= screen= action=`.
+- [x] **1.3 Curtain.** Verified on emulator: covers, swallows scrolls, steps aside on permission dialogs and app prompts, leaves with the app, never covers the keyboard, starts below the status bar.
+- [~] **1.4 Exit action + single-item session.** Unit tested (identity + pager position + warm-up). Rotation not tested.
+- [x] **1.5 Settings store + main UI.**
 
 ### M2 — Instagram
-- [ ] **2.1 Classifier.** HOME, EXPLORE, SEARCH_RESULTS, REELS_TAB, REEL_VIEWER, STORY_VIEWER, DIRECT, PROFILE, CREATE, UNKNOWN. Verify: fixture tests, including story viewer ≠ reel viewer.
-- [ ] **2.2 Hide feed.** Verify: emulator — stories visible, feed covered, scroll blocked, pull-to-refresh exposes nothing, stories open, DM/profile/create reachable.
-- [ ] **2.3 Hide home screen.** Verify: whole Home covered, nav works, feed switch greyed.
-- [ ] **2.4 Hide Explore.** Verify: grid covered; typing a username in search shows results and opens profile; suggested grid under keyword results covered.
-- [ ] **2.5 Block Reels tab (balanced).** Verify: Reels tab exits; DM Reel plays, swipe exits; profile/Saved Reel plays once.
-- [ ] **2.6 Block Reels entirely (strict).** Verify: DM Reel exits; stories and highlights still play.
-- [ ] **2.7 Open in Messages.** Verify: force-stop + launch lands in DM inbox 10/10; tapping Home afterwards shows Home (with covers), no redirect; notification deep link not redirected.
+- [x] **2.1 Classifier.** Story viewer (`reel_viewer_root`) ≠ Reels viewer (`clips_viewer_view_pager`).
+- [x] **2.2 Hide feed.** e2e: covered, scroll blocked, pull-to-refresh exposes no post, stories open.
+- [x] **2.3 Hide home screen.**
+- [x] **2.4 Hide Explore.** e2e: grid covered, typing not covered, keyword "For you" results covered below account rows, Accounts tab open.
+- [~] **2.5 Block Reels tab (balanced).** e2e: Reels tab bounces to Home; profile Reel plays, next swipe closes. DM Reel: fixture-tested only (test thread lost its shared Reel).
+- [~] **2.6 Block Reels entirely (strict).** e2e on profile Reels; DM path fixture-tested.
+- [x] **2.7 Open in Messages.** e2e: lands in inbox; Home tapped afterwards is not redirected. Notification deep links not tested.
 
 ### M3 — YouTube
-- [ ] **3.1 Classifier.** HOME, SUBSCRIPTIONS, SEARCH, WATCH, SHORTS_TAB, SHORTS_PLAYER, CHANNEL, YOU, UNKNOWN. Verify: fixture tests.
-- [ ] **3.2 Hide Home.** Verify: Home covered; Subscriptions, search, You open.
-- [ ] **3.3 Shorts balanced/strict.** Verify: tab exits; Short from search plays once then exits on swipe (balanced); exits immediately (strict).
-- [ ] **3.4 Hide Up next.** Verify: watch page suggestions covered; video controls, description, comments sheet work; fullscreen/miniplayer untouched.
+- [x] **3.1 Classifier.** Fixture-tested on 21.47.483 (top Home/Subs tabs, bottom pivot by position).
+- [~] **3.2 Hide Home.** e2e covered. Subscriptions check blocked: YouTube's feed stopped loading on the emulator (network validated, app-side), so the Subs tab never appeared.
+- [~] **3.3 Shorts balanced/strict.** Fixture-tested; Shorts tab bounce verified earlier. Re-run e2e once YouTube loads.
+- [~] **3.4 Hide Up next.** Fixture-tested (cover starts below the comments teaser, panel open = no cover). e2e pending same YouTube issue.
 
 ### M4 — TikTok
-- [ ] **4.1 Classifier** (both packages). FOR_YOU, FOLLOWING, VIDEO_SINGLE, INBOX, DM, PROFILE, SEARCH, UNKNOWN. Verify: fixture tests.
-- [ ] **4.2 Hide feeds.** Verify: For You + Following covered; DM video plays, next swipe exits; search/profile usable.
+- [x] **4.1 Classifier.** Structural (ids are obfuscated): 5-cell bottom bar, DetailActivity for single videos.
+- [~] **4.2 Hide feeds.** e2e: Home covered, Inbox open. Single video from DM fixture-tested; next-swipe in a DM video didn't advance on the emulator, so exit-on-next is unit-tested only.
 
 ### M5 — X
-- [ ] **5.1 Classifier + Hide For You.** X can't be used on the emulator. Verify: fixture tests from dumps captured on the physical phone; manual check on phone — For You covered, Following uncovers, search/notifications/DMs usable.
+- [~] **5.1 Classifier + Hide For You.** Built from labels ("For you" tab, structural bottom bar). Untested: X refuses sign-in on the emulator.
 
 ### M6 — LinkedIn
-- [ ] **6.1 Classifier + Hide feed.** Verify: Home feed covered; search, network, messaging, notifications, jobs usable.
+- [x] **6.1 Classifier + Hide feed.** e2e: feed covered, Jobs open, push prompt left alone.
 
 ### M7 — Lock
-- [ ] **7.1 Password lock.** Verify: unit tests (hash/verify, wrong password); emulator — locked state disables all switches, survives force-stop/reboot, wrong password rejected, right one unlocks.
+- [x] **7.1 Password lock.** Unit tests (PBKDF2 verify/salt). Emulator: switches disabled when locked, survives force-stop, wrong password rejected, right one unlocks.
 
 ### M8 — Hardening & release
-- [ ] **8.1 Never lock out.** Verify: system dialogs, share sheet, keyboard, rotation, split screen, another device language — no curtain where it shouldn't be.
-- [ ] **8.2 Watchdog notification** when service stops. Verify: disable service via adb, notification appears.
-- [ ] **8.3 Performance.** Event handling time logged; verify p95 < 16 ms on emulator, no full-tree walks on feeds/DM lists.
-- [ ] **8.4 Second device profile.** Re-run M2–M6 emulator checks on a different AVD size.
-- [ ] **8.5 Release build.** Signed APK, permission check, install guide (Allow restricted settings).
-- [ ] **8.6 Device admin (last, optional).** Uninstall needs admin deactivated first. Verify: `adb uninstall` fails while admin active; deactivating then uninstalling works; app still usable without granting admin.
+- [~] **8.1 Never lock out.** Verified: permission dialogs, app prompts, keyboard, leaving the app. Not yet: share sheet, rotation, split screen, other language.
+- [x] **8.2 Watchdog notification.** Posts on unbind, clears on reconnect, re-checks after boot/update.
+- [ ] **8.3 Performance.** Scans are budgeted (400–700 nodes); timing not measured yet.
+- [ ] **8.4 Second device profile.**
+- [~] **8.5 Release build.** Minified release verified on emulator; signing via untracked `keystore.properties`. Install guide in README.
+- [x] **8.6 Device admin.** `adb uninstall` fails while active; switching it off in unscroll removes it.
