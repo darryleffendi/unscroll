@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 "$ADB" shell settings put secure enabled_accessibility_services com.darryl.unscroll/.service.FocusService
 "$ADB" shell settings put secure accessibility_enabled 1
 for _ in $(seq 1 20); do
-  if "$ADB" shell dumpsys accessibility | grep -q 'label=unscroll'; then echo "service bound"; exit 0; fi
+  if "$ADB" shell dumpsys accessibility | grep 'Bound services' | grep -q 'unscroll'; then echo "service bound"; exit 0; fi
   sleep 0.5
 done
 echo "service did not bind" >&2; exit 1

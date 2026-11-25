@@ -36,6 +36,9 @@ def setting(key, on):
 
 
 def launch(pkg, fresh=True):
+    # Leave to the launcher first, as a real "open the app" would.
+    adb("shell", "input", "keyevent", "HOME")
+    time.sleep(1.5)
     if fresh:
         adb("shell", "am", "force-stop", pkg)
         time.sleep(0.5)
@@ -66,13 +69,32 @@ def wait_line(pattern, timeout=8):
     return None
 
 
-def curtain():
+def curtain_now():
     return "unscroll curtain" in adb("shell", "dumpsys", "window", "windows")
+
+
+def curtain(expected=True, timeout=3):
+    """Polls briefly: window add/remove lags the log line. Returns the final state."""
+    end = time.time() + timeout
+    while True:
+        state = curtain_now()
+        if state == expected or time.time() > end:
+            return state
+        time.sleep(0.3)
 
 
 def check(name, ok, detail=""):
     results.append((name, ok))
     print(("PASS " if ok else "FAIL ") + name + (f"  [{detail}]" if detail and not ok else ""))
+
+
+def swipe_next(pattern):
+    """Swipes to the next full-screen item; a swipe right after opening sometimes doesn't take."""
+    for _ in range(2):
+        swipe(540, 1900, 540, 300, 120)
+        if wait_line(pattern, 4):
+            return True
+    return False
 
 
 def settle(s=2.0):
@@ -104,7 +126,7 @@ def instagram():
     check("Explore grid is covered", wait_line(r"screen=IG_EXPLORE action=COVER") is not None, last())
     tap("action_bar_search_edit_text"); settle(1.5)
     adb("shell", "input", "text", "nasa"); settle(2.5)
-    check("typing a search is not covered", "IG_SEARCH " in last() and "ALLOW" in last() and not curtain(), last())
+    check("typing a search is not covered", "IG_SEARCH " in last() and "ALLOW" in last() and not curtain(False), last())
     mark(); adb("shell", "input", "keyevent", "ENTER")
     check("keyword results: suggested grid covered", wait_line(r"screen=IG_SEARCH_RESULTS action=COVER") is not None, last())
     ui("tapchild", "scrollable_tab_layout", "0")
@@ -141,8 +163,8 @@ def instagram():
     check("a Reel from a profile plays", opened, last())
     if opened:
         settle(2)
-        mark(); swipe(540, 1900, 540, 300, 120)
-        check("swiping to the next Reel closes it", wait_line(r"screen=IG_REEL_VIEWER action=BACK") is not None, last())
+        mark()
+        check("swiping to the next Reel closes it", swipe_next(r"screen=IG_REEL_VIEWER action=BACK"), last())
         settle(2)
         check("...back on the profile", ui("has", "profile_tabs_container").returncode == 0)
         setting("ig_block_reels_all", True)
@@ -167,7 +189,7 @@ def instagram():
     setting("ig_open_messages", False)
 
     mark(); adb("shell", "input", "keyevent", "HOME"); settle(2)
-    check("curtain leaves with the app", not curtain(), last())
+    check("curtain leaves with the app", not curtain(False), last())
 
 
 def youtube():
@@ -177,7 +199,7 @@ def youtube():
     mark(); launch(pkg)
     check("YT Home is covered", wait_line(r"screen=YT_HOME action=COVER", 12) is not None and curtain(), last())
     mark(); tap("desc=Subs")
-    check("Subscriptions open", wait_line(r"screen=YT_SUBSCRIPTIONS action=ALLOW") is not None and not curtain(), last())
+    check("Subscriptions open", wait_line(r"screen=YT_SUBSCRIPTIONS action=ALLOW") is not None and not curtain(False), last())
     mark(); adb("shell", "input", "tap", "405", "2274")
     l = wait_line(r"screen=YT_SHORTS_TAB action=TAP")
     settle(2)
@@ -189,8 +211,8 @@ def youtube():
     if tap("desc=play Short"):
         check("a Short from search plays", wait_line(r"screen=YT_SHORTS_PLAYER action=ALLOW") is not None, last())
         settle(2.5)
-        mark(); swipe(540, 1900, 540, 300, 120)
-        check("swiping to the next Short closes it", wait_line(r"screen=YT_SHORTS_PLAYER action=BACK") is not None, last())
+        mark()
+        check("swiping to the next Short closes it", swipe_next(r"screen=YT_SHORTS_PLAYER action=BACK"), last())
         settle(2)
         setting("yt_block_shorts_all", True)
         mark(); tap("desc=play Short")
@@ -205,7 +227,7 @@ def youtube():
     l = wait_line(r"screen=YT_WATCH action=COVER", 15)
     check("watch page: Up next covered", l is not None, last())
     mark(); adb("shell", "input", "keyevent", "HOME"); settle(2)
-    check("curtain leaves with the app", not curtain(), last())
+    check("curtain leaves with the app", not curtain(False), last())
 
 
 def tiktok():
@@ -216,9 +238,9 @@ def tiktok():
     adb("shell", "input", "tap", "108", "2270")
     check("TikTok Home feed is covered", wait_line(r"screen=TT_FEED action=COVER", 10) is not None and curtain(), last())
     mark(); adb("shell", "input", "tap", "756", "2270")
-    check("Inbox is open", wait_line(r"screen=TT_TAB action=ALLOW") is not None and not curtain(), last())
+    check("Inbox is open", wait_line(r"screen=TT_TAB action=ALLOW") is not None and not curtain(False), last())
     mark(); adb("shell", "input", "keyevent", "HOME"); settle(2)
-    check("curtain leaves with the app", not curtain(), last())
+    check("curtain leaves with the app", not curtain(False), last())
 
 
 def linkedin():
@@ -227,10 +249,10 @@ def linkedin():
     mark(); launch(pkg)
     check("LinkedIn feed is covered", wait_line(r"screen=LI_FEED action=COVER", 12) is not None and curtain(), last())
     mark(); tap("tab_jobs")
-    check("Jobs tab is open", wait_line(r"screen=LI_TAB action=ALLOW") is not None and not curtain(), last())
+    check("Jobs tab is open", wait_line(r"screen=LI_TAB action=ALLOW") is not None and not curtain(False), last())
     tap("tab_feed"); settle(1.5)
     mark(); adb("shell", "input", "keyevent", "HOME"); settle(2)
-    check("curtain leaves with the app", not curtain(), last())
+    check("curtain leaves with the app", not curtain(False), last())
 
 
 SUITES = {"instagram": instagram, "youtube": youtube, "tiktok": tiktok, "linkedin": linkedin}
