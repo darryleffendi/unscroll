@@ -1,6 +1,9 @@
 package com.darryl.unscroll.apps
 
 import com.darryl.unscroll.core.Action
+import com.darryl.unscroll.core.AppSelectors
+import com.darryl.unscroll.core.Bounds
+import com.darryl.unscroll.core.TapPrediction
 import com.darryl.unscroll.core.AppRules
 import com.darryl.unscroll.core.Decision
 import com.darryl.unscroll.core.Geometry
@@ -15,6 +18,12 @@ class YouTubeRules : AppRules {
     private val shortSession = SingleItemSession()
 
     override fun reset() = shortSession.reset()
+
+    /** Bottom-bar tabs other than Home never show a cover. Home itself may be Subscriptions: let the scan decide. */
+    override fun predictTap(tapped: UiNode, screen: Bounds, selectors: AppSelectors): TapPrediction {
+        val cell = tapped.bottomBarCell(screen, PIVOT_CELLS)
+        return if (cell >= 0 && cell != selectors.number("pivot_home_index", 0)) TapPrediction.Leaves else TapPrediction.Unknown
+    }
 
     override fun decide(ctx: ScreenContext): Decision {
         val s = ctx.settings
@@ -90,5 +99,6 @@ class YouTubeRules : AppRules {
         const val WATCH = "YT_WATCH"
         const val SHORTS_TAB = "YT_SHORTS_TAB"
         const val SHORTS_PLAYER = "YT_SHORTS_PLAYER"
+        private const val PIVOT_CELLS = 4
     }
 }

@@ -1,6 +1,10 @@
 package com.darryl.unscroll.apps
 
 import com.darryl.unscroll.core.Action
+import com.darryl.unscroll.core.AppSelectors
+import com.darryl.unscroll.core.Bounds
+import com.darryl.unscroll.core.TapPrediction
+import com.darryl.unscroll.core.UiNode
 import com.darryl.unscroll.core.AppRules
 import com.darryl.unscroll.core.Decision
 import com.darryl.unscroll.core.Geometry
@@ -16,6 +20,13 @@ class TikTokRules : AppRules {
     private val videoSession = SingleItemSession()
 
     override fun reset() = videoSession.reset()
+
+    override fun predictTap(tapped: UiNode, screen: Bounds, selectors: AppSelectors): TapPrediction =
+        when (tapped.bottomBarCell(screen, 5)) {
+            -1 -> TapPrediction.Unknown
+            selectors.number("home_tab_index", 0) -> TapPrediction.Arrives(FEED)
+            else -> TapPrediction.Leaves
+        }
 
     override fun decide(ctx: ScreenContext): Decision {
         val on = ctx.settings.isOn(Toggle.TT_HIDE_FEEDS)

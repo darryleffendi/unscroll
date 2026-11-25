@@ -70,7 +70,11 @@ def wait_line(pattern, timeout=8):
 
 
 def curtain_now():
-    return "unscroll curtain" in adb("shell", "dumpsys", "window", "windows")
+    """The curtain window stays attached; it's showing when its view is VISIBLE (0x0)."""
+    out = adb("shell", "dumpsys", "window", "windows")
+    i = out.find("unscroll curtain}:")
+    m = re.search(r"mViewVisibility=0x(\w+)", out[i:]) if i >= 0 else None
+    return m is not None and m.group(1) == "0"
 
 
 def curtain(expected=True, timeout=3):
@@ -107,8 +111,8 @@ def instagram():
                  ("ig_block_reels_tab", True), ("ig_block_reels_all", False), ("ig_open_messages", False)]:
         setting(k, v)
     mark(); launch(pkg)
-    l = wait_line(r"screen=IG_HOME action=COVER")
-    check("IG opens on Home with the feed covered", l is not None and curtain(), last())
+    l = wait_line(r"screen=IG_HOME action=COVER", 12)  # cold start: Instagram's UI thread is slow to answer
+    check("IG opens on Home with the feed covered", l is not None and curtain(True, 6), last())
     top = int(re.search(r"COVER\[(\d+)", l).group(1)) if l else 0
 
     swipe(540, 1500, 540, 600); settle()
@@ -139,8 +143,7 @@ def instagram():
 
     mark(); tap("clips_tab")
     l = wait_line(r"screen=IG_REELS_TAB action=TAP")
-    settle(2)
-    check("Reels tab bounces back to Home", l is not None and "IG_HOME" in last(), last())
+    check("Reels tab bounces back to Home", l is not None and wait_line(r"screen=IG_HOME", 6) is not None, last())
 
     mark(); tap("feed_tab"); settle(2)
     adb("shell", "input", "tap", "410", "400")
@@ -181,8 +184,8 @@ def instagram():
 
     setting("ig_open_messages", True)
     mark(); launch(pkg)
-    l = wait_line(r"TAP\(open Messages\)")
-    settle(2.5)
+    l = wait_line(r"TAP\(open Messages\)", 12)
+    settle(3)
     check("Open in Messages lands in the inbox", l is not None and ui("has", "direct_inbox_action_bar").returncode == 0, last())
     mark(); tap("feed_tab"); settle(2.5)
     check("tapping Home afterwards is not redirected", "IG_HOME action=COVER" in last(), last())

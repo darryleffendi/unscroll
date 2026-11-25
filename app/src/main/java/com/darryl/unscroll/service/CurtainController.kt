@@ -27,50 +27,80 @@ class CurtainController(private val service: AccessibilityService) {
     private var view: CurtainView? = null
     private var params: WindowManager.LayoutParams? = null
     private var shown: Bounds? = null
+    private var visible = false
 
-    val isShowing get() = view != null
+    val isShowing get() = visible
 
+    /**
+     * The window is added once and then only moved, shown and hidden: adding and removing
+     * a window per transition costs a window-manager round trip and a first frame each time.
+     */
     fun show(bounds: Bounds, message: String) {
-        val current = view
-        if (current != null && shown == bounds) {
-            current.setMessage(message)
-            return
-        }
-        val lp = params ?: layoutParams().also { params = it }
+        val v = view ?: attach() ?: return
+        v.setMessage(message)
+        if (visible && shown == bounds) return
+        val lp = params!!
         lp.x = bounds.left
         lp.y = bounds.top
         lp.width = bounds.width
         lp.height = bounds.height
-        if (current == null) {
-            val v = CurtainView(service)
-            v.setMessage(message)
-            try {
-                wm.addView(v, lp)
-                view = v
-            } catch (e: RuntimeException) {
-                // The service can be mid-teardown; the next event retries.
-                return
-            }
-        } else {
-            current.setMessage(message)
-            current.setCompact(bounds.height < COMPACT_HEIGHT)
-            wm.updateViewLayout(current, lp)
-        }
-        view?.setCompact(bounds.height < COMPACT_HEIGHT)
+        lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        v.setCompact(bounds.height < COMPACT_HEIGHT)
+        v.visibility = View.VISIBLE
+        update(v, lp)
         shown = bounds
+        visible = true
     }
 
     fun applyTheme(config: Configuration) {
         view?.applyTheme(config)
     }
 
+    /** Hidden and untouchable, so touches go straight to the app. */
     fun hide() {
         val v = view ?: return
+        if (!visible) return
+        visible = false
+        shown = null
+        val lp = params!!
+        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        v.visibility = View.GONE
+        update(v, lp)
+    }
+
+    /** Removes the window for good (service shutting down). */
+    fun detach() {
+        val v = view ?: return
         view = null
+        visible = false
         shown = null
         try {
             wm.removeViewImmediate(v)
         } catch (_: RuntimeException) {
+        }
+    }
+
+    private fun attach(): CurtainView? {
+        val lp = params ?: layoutParams().also { params = it }
+        val v = CurtainView(service)
+        v.visibility = View.GONE
+        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        return try {
+            wm.addView(v, lp)
+            view = v
+            v
+        } catch (e: RuntimeException) {
+            // The service can be mid-teardown; the next event retries.
+            null
+        }
+    }
+
+    private fun update(v: View, lp: WindowManager.LayoutParams) {
+        try {
+            wm.updateViewLayout(v, lp)
+        } catch (_: RuntimeException) {
+            view = null
+            visible = false
         }
     }
 

@@ -17,7 +17,7 @@ class XRules : AppRules {
     override fun decide(ctx: ScreenContext): Decision {
         if (!ctx.settings.isOn(Toggle.X_HIDE_FOR_YOU)) return Decision(OTHER, Action.Allow)
         val forYou = ctx.selectors["for_you_tab"]
-        val row = NodeSearch.find(ctx.root, budget = 500) { node ->
+        val row = ctx.nodes.firstOrNull { node ->
             node.childCount in 2..8 && node.bounds.top < ctx.screen.height / 3 &&
                 node.children.any { child -> NodeSearch.find(child, 12) { forYou.matches(it) } != null }
         } ?: return Decision(OTHER, Action.Allow)

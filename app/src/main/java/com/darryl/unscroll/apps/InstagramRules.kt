@@ -1,10 +1,13 @@
 package com.darryl.unscroll.apps
 
 import com.darryl.unscroll.core.Action
+import com.darryl.unscroll.core.AppSelectors
+import com.darryl.unscroll.core.Bounds
+import com.darryl.unscroll.core.TapPrediction
+import com.darryl.unscroll.core.UiNode
 import com.darryl.unscroll.core.AppRules
 import com.darryl.unscroll.core.Decision
 import com.darryl.unscroll.core.Geometry
-import com.darryl.unscroll.core.NodeSearch
 import com.darryl.unscroll.core.ScreenContext
 import com.darryl.unscroll.core.SingleItemSession
 import com.darryl.unscroll.core.Toggle
@@ -15,7 +18,17 @@ class InstagramRules : AppRules {
     /** Remembered so tapping Home covers at once, before the stories tray has drawn. */
     private var lastFeedTop: Int? = null
     private var lastTrayHeight = 0
+    /** The header can drop out of the tree mid pull-to-refresh; the cap still needs it. */
+    private var lastHeaderBottom: Int? = null
     private var redirect = RedirectState()
+
+    override fun predictTap(tapped: UiNode, screen: Bounds, selectors: AppSelectors): TapPrediction = when {
+        selectors["home_tab"].matchesId(tapped) -> TapPrediction.Arrives(HOME)
+        selectors["search_tab"].matchesId(tapped) -> TapPrediction.Arrives(EXPLORE)
+        selectors["reels_tab"].matchesId(tapped) || selectors["direct_tab"].matchesId(tapped) ||
+            selectors["profile_tab"].matchesId(tapped) -> TapPrediction.Leaves
+        else -> TapPrediction.Unknown
+    }
 
     override fun reset() {
         reelSession.reset()
@@ -58,7 +71,7 @@ class InstagramRules : AppRules {
             // Only the first ("For you"/"Top") results tab mixes in a suggested grid.
             val firstTabSelected = searchTabs.rowWithChildren(2)?.selectedChildIndex() == 0
             if (!s.isOn(Toggle.IG_HIDE_EXPLORE) || !firstTabSelected) return Decision(SEARCH_RESULTS, Action.Allow)
-            val userRows = NodeSearch.findAll(ctx.root) { ctx.selectors["search_user_row"].matchesId(it) }
+            val userRows = ctx.findAllById("search_user_row")
             val top = userRows.maxOfOrNull { it.bounds.bottom } ?: searchTabs.bounds.bottom
             return Decision(SEARCH_RESULTS, cover(ctx, top, navTop, "Suggested posts are hidden. Accounts tab shows people."))
         }
@@ -72,7 +85,7 @@ class InstagramRules : AppRules {
         return Decision.unknown()
     }
 
-    private fun decideReels(ctx: ScreenContext, pager: com.darryl.unscroll.core.UiNode): Decision {
+    private fun decideReels(ctx: ScreenContext, pager: UiNode): Decision {
         val s = ctx.settings
         val reelsTabSelected = ctx.find("reels_tab")?.isSelectedDeep() == true && ctx.has("tab_bar")
         if (reelsTabSelected) {
@@ -93,7 +106,8 @@ class InstagramRules : AppRules {
         if (s.isOn(Toggle.IG_OPEN_MESSAGES)) redirectToMessages(ctx)?.let { return Decision(HOME, it) }
 
         val header = ctx.find("home_header")
-        val headerBottom = header?.bounds?.bottom
+        header?.let { lastHeaderBottom = it.bounds.bottom }
+        val headerBottom = header?.bounds?.bottom ?: lastHeaderBottom
         if (s.isOn(Toggle.IG_HIDE_HOME)) {
             val top = maxOf(header?.bounds?.top ?: ctx.screen.top, ctx.safeTop)
             return Decision(HOME, cover(ctx, top, navTop, "Home is hidden. Messages, search and your profile still work."))

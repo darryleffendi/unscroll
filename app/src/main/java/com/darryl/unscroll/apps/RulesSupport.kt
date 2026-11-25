@@ -46,13 +46,21 @@ internal fun ScreenContext.centerItemIdentity(pager: UiNode?): String? {
  * a full-width row near the bottom whose children are all clickable cells of similar width.
  */
 internal fun ScreenContext.structuralBottomNav(cells: IntRange): UiNode? =
-    com.darryl.unscroll.core.NodeSearch.find(root, budget = 700) { node ->
+    nodes.firstOrNull { node ->
         val b = node.bounds
-        if (node.childCount !in cells) return@find false
-        if (b.width < screen.width * 9 / 10 || b.bottom < screen.top + screen.height * 85 / 100) return@find false
-        if (b.height > screen.height / 6) return@find false
+        if (node.childCount !in cells) return@firstOrNull false
+        if (b.width < screen.width * 9 / 10 || b.bottom < screen.top + screen.height * 85 / 100) return@firstOrNull false
+        if (b.height > screen.height / 6) return@firstOrNull false
         val kids = node.children.toList()
-        if (kids.size != node.childCount || kids.any { !it.isClickable }) return@find false
+        if (kids.size != node.childCount || kids.any { !it.isClickable }) return@firstOrNull false
         val widths = kids.map { it.bounds.width }
         widths.min() * 10 >= widths.max() * 7
     }
+
+/** Which cell of a full-width bottom bar with [cells] cells a tapped node is, or -1 if it isn't in one. */
+internal fun UiNode.bottomBarCell(screen: com.darryl.unscroll.core.Bounds, cells: Int): Int {
+    val b = bounds
+    if (b.top < screen.top + screen.height * 85 / 100 || b.height > screen.height / 6) return -1
+    if (b.width > screen.width / cells * 3 / 2) return -1
+    return ((b.left + b.right) / 2 - screen.left) * cells / screen.width
+}

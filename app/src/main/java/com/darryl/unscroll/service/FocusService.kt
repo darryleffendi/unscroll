@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -22,6 +23,7 @@ import com.darryl.unscroll.core.Decision
 import com.darryl.unscroll.core.ScreenContext
 import com.darryl.unscroll.core.Selectors
 import com.darryl.unscroll.core.Settings
+import com.darryl.unscroll.core.TapPrediction
 import com.darryl.unscroll.core.Toggle
 import com.darryl.unscroll.core.UiNode
 import com.darryl.unscroll.data.SettingsRepository
@@ -59,6 +61,10 @@ class FocusService : AccessibilityService() {
     private var unknownSinceMs = -1L
     private var lastLogged = ""
     private var evaluateScheduled = false
+    private var lastScreenBounds: Bounds? = null
+    private var lastNodeCount = -1
+    /** Last cover per app screen, for showing it the moment its tab is tapped. */
+    private val lastCovers = HashMap<String, Action.Cover>()
     private var dumpReceiver: BroadcastReceiver? = null
     private var setReceiverRef: BroadcastReceiver? = null
 
@@ -83,6 +89,7 @@ class FocusService : AccessibilityService() {
             selectors = Selectors.parse(assets.open("selectors.json").bufferedReader().use { it.readText() })
             SettingsRepository(this).state.onEach {
                 settings = it.settings
+                lastCovers.clear()
                 schedule(0)
             }.launchIn(scope)
             ServiceStatus.connected(true)
@@ -109,6 +116,7 @@ class FocusService : AccessibilityService() {
     private fun handleEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
         when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> if (pkg != null && pkg == foregroundPkg) predictTap(pkg, event)
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (pkg in TARGET_PACKAGES) {
                 event.className?.let { windowClasses[pkg!!] = it.toString() }
                 viewerIndex = null
@@ -143,13 +151,30 @@ class FocusService : AccessibilityService() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         scope.cancel()
-        if (::curtain.isInitialized) curtain.hide()
+        if (::curtain.isInitialized) curtain.detach()
         dumpReceiver?.let(::unregisterReceiver)
         dumpReceiver = null
         setReceiverRef?.let(::unregisterReceiver)
         setReceiverRef = null
         ServiceStatus.connected(false)
         super.onDestroy()
+    }
+
+    /**
+     * React to a tab tap before the app redraws: drop the curtain when leaving a covered
+     * screen, or put back the last cover of the screen being opened. The scan that follows
+     * corrects any wrong guess within a frame or two.
+     */
+    private fun predictTap(pkg: String, event: AccessibilityEvent) {
+        val source = event.source ?: return
+        val screen = lastScreenBounds ?: return
+        val p = rules[pkg]?.predictTap(AccessibilityUiNode(source), screen, selectors.forPackage(pkg))
+        if (BuildConfig.DEBUG) Log.d(TAG, "tap ${source.viewIdResourceName} -> $p")
+        when (p) {
+            TapPrediction.Leaves -> curtain.hide()
+            is TapPrediction.Arrives -> lastCovers["$pkg/${p.screen}"]?.let { curtain.show(it.bounds, it.message) }
+            else -> {}
+        }
     }
 
     /** Throttle, not debounce: a playing video sends content changes nonstop. */
@@ -167,7 +192,9 @@ class FocusService : AccessibilityService() {
     private fun safeEvaluate() {
         if (!::curtain.isInitialized || !::selectors.isInitialized) return
         try {
+            val start = SystemClock.elapsedRealtimeNanos()
             evaluate()
+            if (BuildConfig.DEBUG) Log.d(TAG, "evaluate took ${(SystemClock.elapsedRealtimeNanos() - start) / 1_000_000} ms screen=${ServiceStatus.snapshot.value.screen} nodes=$lastNodeCount")
         } catch (e: RuntimeException) {
             Log.w(TAG, "evaluate failed", e)
             CrashLog.record(this, "screen check", e)
@@ -191,6 +218,7 @@ class FocusService : AccessibilityService() {
             handler.removeCallbacks(watchdog)
             handler.postDelayed(watchdog, WATCHDOG_MS)
         }
+        lastScreenBounds = active.bounds
         val ctx = ScreenContext(
             packageName = active.pkg,
             root = active.root,
@@ -211,6 +239,7 @@ class FocusService : AccessibilityService() {
             Decision.unknown()
         }
         apply(decision, active, now)
+        if (BuildConfig.DEBUG) lastNodeCount = ctx.nodesIfBuilt()
     }
 
     private fun apply(decision: Decision, active: ActiveWindow, now: Long) {
@@ -222,6 +251,7 @@ class FocusService : AccessibilityService() {
                 val bottom = minOf(action.bounds.bottom, active.imeTop ?: Int.MAX_VALUE)
                 if (bottom - action.bounds.top < 24) curtain.hide()
                 else curtain.show(action.bounds.copy(bottom = bottom), action.message)
+                lastCovers["${active.pkg}/${decision.screen}"] = action
             }
             Action.Allow -> if (decision.screen == Decision.UNKNOWN && curtain.isShowing) {
                 // Mid-transition screens are often unrecognized for a moment: keep the
@@ -301,7 +331,8 @@ class FocusService : AccessibilityService() {
             if (app == null && (w.isActive || w.isFocused) && w.type == AccessibilityWindowInfo.TYPE_APPLICATION) app = w
         }
         val window = app ?: return null
-        val root = window.root ?: return null
+        val root = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) window.getRoot(AccessibilityUiNode.PREFETCH) else window.root)
+            ?: return null
         val pkg = root.packageName?.toString() ?: return null
         if (pkg !in TARGET_PACKAGES) return null
         window.getBoundsInScreen(r)
@@ -358,9 +389,9 @@ class FocusService : AccessibilityService() {
         const val TAG = "Unscroll"
         const val ACTION_DUMP = "com.darryl.unscroll.DUMP"
         const val ACTION_SET = "com.darryl.unscroll.SET"
-        const val THROTTLE_MS = 80L
+        const val THROTTLE_MS = 40L
         const val WATCHDOG_MS = 1_000L
-        const val UNKNOWN_GRACE_MS = 600L
+        const val UNKNOWN_GRACE_MS = 300L
         const val EXIT_COOLDOWN_MS = 800L
         val TARGET_PACKAGES = setOf(
             "com.instagram.android",

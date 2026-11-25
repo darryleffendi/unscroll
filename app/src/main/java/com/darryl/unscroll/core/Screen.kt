@@ -20,14 +20,37 @@ class ScreenContext(
 ) {
     private val cache = HashMap<String, UiNode?>()
 
-    /** First visible node matching the selector; ids are tried in a first pass, labels in a second. */
-    fun find(key: String, budget: Int = NodeSearch.DEFAULT_BUDGET): UiNode? = cache.getOrPut(key) {
-        val selector = selectors[key]
-        if (selector.ids.isNotEmpty()) NodeSearch.find(root, budget) { selector.matchesId(it) }?.let { return@getOrPut it }
-        if (selector.descs.isNotEmpty() || selector.texts.isNotEmpty()) NodeSearch.find(root, budget) { selector.matchesLabel(it) } else null
+    /**
+     * Every visible node, breadth-first, from a single walk of the tree. Each child access
+     * is a cross-process call into the app, so rules query this instead of walking again.
+     */
+    private val nodesLazy = lazy { NodeSearch.findAll(root, SNAPSHOT_BUDGET) { true } }
+    val nodes: List<UiNode> by nodesLazy
+
+    /** Snapshot size, or -1 if no rule needed it (debug logging). */
+    fun nodesIfBuilt(): Int = if (nodesLazy.isInitialized()) nodesLazy.value.size else -1
+
+    private val byId: Map<String, List<UiNode>> by lazy {
+        val map = HashMap<String, MutableList<UiNode>>()
+        for (n in nodes) n.viewId?.let { map.getOrPut(it) { mutableListOf() }.add(n) }
+        map
     }
 
+    /** First visible node matching the selector: its ids in order, then its labels. */
+    fun find(key: String): UiNode? = cache.getOrPut(key) {
+        val selector = selectors[key]
+        for (id in selector.ids) byId[id]?.firstOrNull()?.let { return@getOrPut it }
+        if (selector.descs.isNotEmpty() || selector.texts.isNotEmpty()) nodes.firstOrNull { selector.matchesLabel(it) } else null
+    }
+
+    /** All visible nodes with one of the selector's ids. */
+    fun findAllById(key: String): List<UiNode> = selectors[key].ids.flatMap { byId[it].orEmpty() }
+
     fun has(key: String) = find(key) != null
+
+    companion object {
+        const val SNAPSHOT_BUDGET = 900
+    }
 }
 
 sealed interface Action {
@@ -49,8 +72,20 @@ data class Decision(val screen: String, val action: Action) {
     }
 }
 
+/** What a tap on a navigation tab is about to do, known before the app redraws. */
+sealed interface TapPrediction {
+    data object Unknown : TapPrediction
+    /** Leaving for a screen that is never covered: drop the curtain now. */
+    data object Leaves : TapPrediction
+    /** Going to [screen]: show its last cover now, the next scan corrects it. */
+    data class Arrives(val screen: String) : TapPrediction
+}
+
 interface AppRules {
     fun decide(ctx: ScreenContext): Decision
+
+    fun predictTap(tapped: UiNode, screen: Bounds, selectors: AppSelectors): TapPrediction = TapPrediction.Unknown
+
     /** The app left the foreground; drop per-visit state. */
     fun reset() {}
 }

@@ -10,6 +10,7 @@
       "reels_tab": { "ids": ["clips_tab"], "descs": ["Reels"] },
       "direct_tab": { "ids": ["direct_tab"], "descs": ["Message", "Messages", "Direct"] },
       "search_tab": { "ids": ["search_tab"], "descs": ["Search and explore"] },
+      "profile_tab": { "ids": ["profile_tab"] },
       "home_header": { "ids": ["action_bar_container"] },
       "home_logo": { "ids": ["title_logo"] },
       "stories_tray": { "ids": ["reels_tray_container", "tray_recycler_view", "stories_tray", "overlay_stories_tray_container"] },
@@ -76,6 +77,7 @@
     "packages": ["com.linkedin.android"],
     "selectors": {
       "home_tab": { "ids": ["tab_feed"], "descs": ["Home"] },
+      "other_tabs": { "ids": ["tab_jobs", "tab_relationships", "tab_notifications", "tab_more", "tab_post"] },
       "top_bar": { "ids": ["home_top_bar_container", "app_bar_layout"] },
       "bottom_bar": { "ids": ["home_bottom_bar"] }
     }
