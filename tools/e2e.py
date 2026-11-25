@@ -91,10 +91,14 @@ def instagram():
 
     swipe(540, 1500, 540, 600); settle()
     check("feed doesn't scroll under the curtain", ui("has", "reels_tray_container").returncode == 0)
-    swipe(540, 450, 540, 1500, 600); settle(2.5)
+    swipe(540, 450, 540, 1500, 600); time.sleep(0.4)
     l = last()
     m = re.search(r"COVER\[(\d+)", l)
-    check("pull-to-refresh keeps posts covered", m is not None and int(m.group(1)) <= max(top, 700), l)
+    cover_top = int(m.group(1)) if m else 0
+    posts_above = [ln for ln in ui("ids").stdout.splitlines()
+                   if ln.startswith("row_feed") and int(re.findall(r"\d+", ln.split()[1])[1]) < cover_top]
+    check("pull-to-refresh keeps posts covered", m is not None and not posts_above, f"{l} {posts_above[:1]}")
+    settle(2)
 
     mark(); tap("search_tab")
     check("Explore grid is covered", wait_line(r"screen=IG_EXPLORE action=COVER") is not None, last())
@@ -148,8 +152,7 @@ def instagram():
     setting("ig_block_reels_all", False)
     launch(pkg); settle(4)
 
-    setting("ig_hide_home", True)
-    mark(); tap("feed_tab")
+    mark(); setting("ig_hide_home", True); tap("feed_tab")
     l = wait_line(r"screen=IG_HOME action=COVER\[(1[0-9]{2}|2[0-9]{2}),")  # starts below the status bar
     check("hide home screen covers header and stories", l is not None, last())
     setting("ig_hide_home", False)

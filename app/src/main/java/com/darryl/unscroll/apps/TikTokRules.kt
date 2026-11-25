@@ -32,7 +32,7 @@ class TikTokRules : AppRules {
         val detail = ctx.windowClass?.let { cls -> ctx.selectors["video_activity"].ids.any { cls.endsWith(it) } } == true
         if (detail || ctx.has("video_page")) {
             if (!on) return Decision(VIDEO, Action.Allow)
-            val same = videoSession.observe(ctx.centerItemIdentity(ctx.find("video_pager") ?: ctx.root), ctx.viewerIndex, ctx.nowMs)
+            val same = videoSession.observe(ctx.centerItemIdentity(ctx.find("video_pager") ?: ctx.root), ctx.centerItemIndex(ctx.find("video_pager") ?: ctx.root), ctx.nowMs)
             return Decision(VIDEO, if (same) Action.Allow else Action.Back)
         }
         videoSession.reset()

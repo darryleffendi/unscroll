@@ -29,7 +29,7 @@ class YouTubeRules : AppRules {
             }
             if (s.isOn(Toggle.YT_BLOCK_SHORTS_ALL)) return Decision(SHORTS_PLAYER, Action.Back)
             if (!s.isOn(Toggle.YT_BLOCK_SHORTS_TAB)) return Decision(SHORTS_PLAYER, Action.Allow)
-            val same = shortSession.observe(ctx.centerItemIdentity(ctx.find("shorts_pager")), ctx.viewerIndex, ctx.nowMs)
+            val same = shortSession.observe(ctx.centerItemIdentity(ctx.find("shorts_pager")), ctx.centerItemIndex(ctx.find("shorts_pager")), ctx.nowMs)
             return Decision(SHORTS_PLAYER, if (same) Action.Allow else Action.Back)
         }
         shortSession.reset()

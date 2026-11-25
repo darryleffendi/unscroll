@@ -19,6 +19,21 @@ internal fun UiNode.rowWithChildren(min: Int, depth: Int = 3): UiNode? {
     return children.firstNotNullOfOrNull { it.rowWithChildren(min, depth - 1) }
 }
 
+/**
+ * Position of the full-screen page under the screen center, from the pager's
+ * CollectionItemInfo; falls back to the index reported by scroll events.
+ */
+internal fun ScreenContext.centerItemIndex(pager: UiNode?): Int? {
+    pager ?: return viewerIndex
+    val cx = (screen.left + screen.right) / 2
+    val cy = (screen.top + screen.bottom) / 2
+    val page = com.darryl.unscroll.core.NodeSearch.find(pager, budget = 40) { n ->
+        n.itemIndex >= 0 && n.bounds.height > screen.height / 2 &&
+            cx in n.bounds.left until n.bounds.right && cy in n.bounds.top until n.bounds.bottom
+    }
+    return page?.itemIndex ?: viewerIndex
+}
+
 /** Identity of the full-screen item under the screen center inside a pager. */
 internal fun ScreenContext.centerItemIdentity(pager: UiNode?): String? {
     pager ?: return null

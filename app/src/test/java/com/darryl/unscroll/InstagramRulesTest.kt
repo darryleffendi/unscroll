@@ -39,9 +39,13 @@ class InstagramRulesTest {
         val file = Fixtures.file("instagram", "home")
         val first = rules.decide(Fixtures.context(pkg, file, settings, nowMs = 1_000, foregroundSinceMs = 500))
         assertEquals("open Messages", (first.action as Action.Tap).label)
-        // Later in the same visit (the user tapped Home themselves): no redirect, feed is covered.
-        val later = rules.decide(Fixtures.context(pkg, file, settings, nowMs = 60_000, foregroundSinceMs = 500))
-        assertTrue(later.action is Action.Cover)
+        // After visiting another screen, coming back to Home is not redirected.
+        rules.decide(Fixtures.context(pkg, Fixtures.file("instagram", "direct_inbox"), settings, nowMs = 1_500, foregroundSinceMs = 500))
+        val back = rules.decide(Fixtures.context(pkg, file, settings, nowMs = 3_000, foregroundSinceMs = 500))
+        assertTrue(back.action is Action.Cover)
+        // Long after launch: no redirect either.
+        val late = InstagramRules().decide(Fixtures.context(pkg, file, settings, nowMs = 60_000, foregroundSinceMs = 500))
+        assertTrue(late.action is Action.Cover)
     }
 
     @Test fun `explore grid is covered below the search bar`() {

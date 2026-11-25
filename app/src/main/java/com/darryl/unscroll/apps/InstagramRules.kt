@@ -23,6 +23,14 @@ class InstagramRules : AppRules {
     }
 
     override fun decide(ctx: ScreenContext): Decision {
+        if (redirect.foregroundSinceMs != ctx.foregroundSinceMs) redirect = RedirectState(ctx.foregroundSinceMs)
+        val decision = classify(ctx)
+        // Once the visit has been somewhere other than Home, Open in Messages is done for it.
+        if (decision.screen != HOME && decision.screen != Decision.UNKNOWN) redirect.expired = true
+        return decision
+    }
+
+    private fun classify(ctx: ScreenContext): Decision {
         val s = ctx.settings
 
         // Instagram calls stories "reels" internally; the story viewer is reel_viewer_root,
@@ -75,7 +83,7 @@ class InstagramRules : AppRules {
         }
         if (s.isOn(Toggle.IG_BLOCK_REELS_ALL)) return Decision(REEL_VIEWER, Action.Back)
         if (!s.isOn(Toggle.IG_BLOCK_REELS_TAB)) return Decision(REEL_VIEWER, Action.Allow)
-        val sameReel = reelSession.observe(ctx.centerItemIdentity(pager), ctx.viewerIndex, ctx.nowMs)
+        val sameReel = reelSession.observe(ctx.centerItemIdentity(pager), ctx.centerItemIndex(pager), ctx.nowMs)
         return Decision(REEL_VIEWER, if (sameReel) Action.Allow else Action.Back)
     }
 
@@ -107,11 +115,13 @@ class InstagramRules : AppRules {
         return Decision(HOME, cover(ctx, top, navTop, "Feed is hidden. Stories stay above."))
     }
 
-    /** Open in Messages: right after Instagram comes to the foreground on Home, tap the Messages tab. */
+    /**
+     * Open in Messages: when Instagram comes to the foreground and its first screen is
+     * Home, tap the Messages tab (retried a few times; the Home covers apply if it fails).
+     */
     private fun redirectToMessages(ctx: ScreenContext): Action? {
-        if (redirect.foregroundSinceMs != ctx.foregroundSinceMs) redirect = RedirectState(ctx.foregroundSinceMs)
         val fresh = ctx.nowMs - ctx.foregroundSinceMs <= REDIRECT_WINDOW_MS
-        if (!fresh || redirect.attempts >= MAX_REDIRECT_ATTEMPTS) return null
+        if (!fresh || redirect.expired || redirect.attempts >= MAX_REDIRECT_ATTEMPTS) return null
         if (ctx.nowMs - redirect.lastAttemptMs < REDIRECT_RETRY_MS) return null
         val direct = ctx.find("direct_tab") ?: return null
         redirect.attempts++
@@ -124,6 +134,7 @@ class InstagramRules : AppRules {
 
     private class RedirectState(val foregroundSinceMs: Long = -1L) {
         var attempts = 0
+        var expired = false
         var lastAttemptMs = Long.MIN_VALUE / 2
     }
 
@@ -138,7 +149,7 @@ class InstagramRules : AppRules {
         const val DIRECT = "IG_DIRECT"
         const val PROFILE = "IG_PROFILE"
 
-        const val REDIRECT_WINDOW_MS = 3_000L
+        const val REDIRECT_WINDOW_MS = 8_000L
         const val REDIRECT_RETRY_MS = 600L
         const val MAX_REDIRECT_ATTEMPTS = 3
     }
