@@ -84,6 +84,7 @@ class FocusService : AccessibilityService() {
             schedule(0)
         }.launchIn(scope)
         ServiceStatus.connected(true)
+        ProtectionMonitor.cancel(this)
         Log.i(TAG, "service connected")
         if (BuildConfig.DEBUG) registerDumpReceiver()
     }
@@ -109,6 +110,13 @@ class FocusService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        // Turned off in Accessibility settings (or by the system): say so.
+        Log.i(TAG, "service unbound")
+        ProtectionMonitor.notifyOff(applicationContext)
+        return super.onUnbind(intent)
+    }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)

@@ -3,4 +3,7 @@
     <string name="service_name">unscroll protection</string>
     <string name="service_description">Covers feeds, Reels, Shorts and recommendations inside Instagram, YouTube, TikTok, X and LinkedIn. Only reads screens of those five apps. Nothing leaves the device: the app has no internet permission.</string>
     <string name="curtain_title">Hidden by unscroll</string>
+    <string name="channel_protection">Protection status</string>
+    <string name="protection_off_title">Protection is not running</string>
+    <string name="protection_off_text">Feeds and Reels are visible again. Tap to turn unscroll back on.</string>
 </resources>
