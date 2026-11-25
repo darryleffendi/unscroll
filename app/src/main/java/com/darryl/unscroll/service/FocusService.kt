@@ -63,6 +63,7 @@ class FocusService : AccessibilityService() {
     private var evaluateScheduled = false
     private var lastScreenBounds: Bounds? = null
     private var lastNodeCount = -1
+    private var lastScrollBackMs = 0L
     /** Last cover per app screen, for showing it the moment its tab is tapped. */
     private val lastCovers = HashMap<String, Action.Cover>()
     private var dumpReceiver: BroadcastReceiver? = null
@@ -251,7 +252,12 @@ class FocusService : AccessibilityService() {
                 val bottom = minOf(action.bounds.bottom, active.imeTop ?: Int.MAX_VALUE)
                 if (bottom - action.bounds.top < 24) curtain.hide()
                 else curtain.show(action.bounds.copy(bottom = bottom), action.message)
-                lastCovers["${active.pkg}/${decision.screen}"] = action
+                if (action.scrollBack == null) lastCovers["${active.pkg}/${decision.screen}"] = action
+                else if (now - lastScrollBackMs > SCROLL_BACK_INTERVAL_MS) {
+                    lastScrollBackMs = now
+                    action.scrollBack.scrollBackward()
+                    schedule(SCROLL_BACK_INTERVAL_MS)
+                }
             }
             Action.Allow -> if (decision.screen == Decision.UNKNOWN && curtain.isShowing) {
                 // Mid-transition screens are often unrecognized for a moment: keep the
@@ -393,6 +399,7 @@ class FocusService : AccessibilityService() {
         const val WATCHDOG_MS = 1_000L
         const val UNKNOWN_GRACE_MS = 300L
         const val EXIT_COOLDOWN_MS = 800L
+        const val SCROLL_BACK_INTERVAL_MS = 250L
         val TARGET_PACKAGES = setOf(
             "com.instagram.android",
             "com.google.android.youtube",

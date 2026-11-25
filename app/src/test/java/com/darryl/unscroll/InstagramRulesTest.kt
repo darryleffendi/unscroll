@@ -120,3 +120,24 @@ class InstagramRulesTest {
         assertEquals(Action.Allow, decide("unknown", "location-prompt").action)
     }
 }
+
+class InstagramScrolledHomeTest {
+    private val pkg = "com.instagram.android"
+
+    @Test fun `stories scrolled off - the cover expands and the feed is scrolled back`() {
+        for (label in listOf("scrolled", "scrolled-far")) {
+            val ctx = Fixtures.context(pkg, Fixtures.file("instagram", "home", label), Settings.DEFAULT)
+            val d = InstagramRules().decide(ctx)
+            assertEquals(label, InstagramRules.HOME, d.screen)
+            val cover = d.action as Action.Cover
+            assertTrue("$label covers from the top of the content", cover.bounds.top <= 279)
+            assertEquals(2211, cover.bounds.bottom)
+            assertTrue("$label asks to scroll the feed back", cover.scrollBack != null)
+        }
+    }
+
+    @Test fun `stories in view - normal cover, no scrolling`() {
+        val d = InstagramRules().decide(Fixtures.context(pkg, Fixtures.file("instagram", "home"), Settings.DEFAULT))
+        assertEquals(null, (d.action as Action.Cover).scrollBack)
+    }
+}

@@ -111,3 +111,25 @@ class LinkedInRulesTest {
         assertTrue(d.action is Action.Allow)
     }
 }
+
+/** Another YouTube build or language may rename the tab strip; Subscriptions must never end up covered. */
+class YouTubeRenamedTabsTest {
+    private val pkg = "com.google.android.youtube"
+
+    private fun renamed(screen: String): java.io.File {
+        val src = Fixtures.file("youtube", screen)
+        val text = src.readText().replace("id/tabs_bar_view", "id/renamed_strip").replace("id/tabs_bar\"", "id/renamed_row\"")
+        return java.io.File.createTempFile("yt-$screen", ".xml").apply { writeText(text); deleteOnExit() }
+    }
+
+    @Test fun `home with a renamed strip still leaves the strip uncovered`() {
+        val d = Fixtures.decide(YouTubeRules(), pkg, renamed("home"))
+        assertEquals(YouTubeRules.HOME, d.screen)
+        assertTrue((d.action as Action.Cover).bounds.top >= 384)
+    }
+
+    @Test fun `subscriptions with a renamed strip stays open`() {
+        val d = Fixtures.decide(YouTubeRules(), pkg, renamed("subscriptions"))
+        assertEquals(Action.Allow, d.action)
+    }
+}

@@ -39,6 +39,8 @@ interface UiNode {
     fun child(index: Int): UiNode?
     /** Tap this node (or its nearest clickable ancestor). Returns false when it couldn't. */
     fun click(): Boolean = false
+    /** Scroll a scrollable list back by a page. */
+    fun scrollBackward(): Boolean = false
 }
 
 val UiNode.children: Sequence<UiNode>

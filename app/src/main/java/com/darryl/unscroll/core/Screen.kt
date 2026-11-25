@@ -55,8 +55,11 @@ class ScreenContext(
 
 sealed interface Action {
     data object Allow : Action
-    /** Cover the rectangle with the curtain. */
-    data class Cover(val bounds: Bounds, val message: String) : Action
+    /**
+     * Cover the rectangle with the curtain; with [scrollBack], also scroll that list
+     * backwards (Instagram's feed, to bring the stories tray back into view).
+     */
+    data class Cover(val bounds: Bounds, val message: String, val scrollBack: UiNode? = null) : Action
     /** Press Back. */
     data object Back : Action
     /** Tap a node (a tab), with Back as the fallback when the tap fails. */

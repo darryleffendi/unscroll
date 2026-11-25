@@ -47,11 +47,16 @@ class YouTubeRules : AppRules {
         if (watchList != null) return decideWatch(ctx, watchList)
 
         if (pivot != null && pivotTab(ctx, pivot, "home")?.isSelectedDeep() == true && !ctx.has("search_box")) {
-            val tabs = ctx.find("feed_tabs")
-            val firstTabSelected = tabs?.rowWithChildren(2)?.selectedChildIndex()?.let { it == 0 } ?: true
-            if (!firstTabSelected) return Decision(SUBSCRIPTIONS, Action.Allow)
+            // Subscriptions selected by label (any language listed in selectors.json).
+            if (ctx.nodes.any { ctx.selectors["subs_tab"].matchesLabel(it) && it.isSelectedDeep() }) {
+                return Decision(SUBSCRIPTIONS, Action.Allow)
+            }
+            // The Home/Subs/… strip: by id, else by shape, so a renamed id never leaves it covered.
+            val tabs = ctx.find("feed_tabs") ?: topTabStrip(ctx, pivot)
+            val selectedTab = tabs?.rowWithChildren(2)?.selectedChildIndex() ?: 0
+            if (selectedTab != 0) return Decision(SUBSCRIPTIONS, Action.Allow)
             if (!s.isOn(Toggle.YT_HIDE_HOME)) return Decision(HOME, Action.Allow)
-            val top = (tabs ?: ctx.find("app_bar"))?.bounds?.bottom ?: ctx.screen.top
+            val top = maxOf(ctx.find("app_bar")?.bounds?.bottom ?: ctx.screen.top, tabs?.bounds?.bottom ?: 0)
             val bottom = pivot.bounds.top
             return Decision(HOME, cover(ctx, top, bottom, "Home is hidden. Subscriptions, search and your library still work."))
         }
@@ -78,6 +83,20 @@ class YouTubeRules : AppRules {
             else -> list.bounds.top
         }
         return Decision(WATCH, cover(ctx, top, list.bounds.bottom, "Up next is hidden."))
+    }
+
+    /**
+     * A horizontal strip of tabs/chips in the top third of the screen: at least three
+     * clickable children side by side, short and nearly full width.
+     */
+    private fun topTabStrip(ctx: ScreenContext, pivot: UiNode): UiNode? = ctx.nodes.firstOrNull { n ->
+        val b = n.bounds
+        if (n === pivot || b.top > ctx.screen.top + ctx.screen.height / 3 || b.height > ctx.screen.height / 10) return@firstOrNull false
+        if (b.width < ctx.screen.width * 7 / 10) return@firstOrNull false
+        val row = n.rowWithChildren(3, depth = 2) ?: return@firstOrNull false
+        val kids = row.children.toList()
+        kids.count { it.isClickable || it.children.any { c -> c.isClickable } } >= 3 &&
+            kids.zipWithNext().all { (a, c) -> c.bounds.left >= a.bounds.left && kotlin.math.abs(c.bounds.top - a.bounds.top) < 20 }
     }
 
     /** A bottom-bar tab: by its description when that matches, else by position. */

@@ -140,13 +140,23 @@ fun SettingsScreen(
 
         SectionLabel("Extra friction")
         Panel {
-            ToggleRow(
-                title = "Make uninstalling harder",
-                detail = "Device admin must be turned off before unscroll can be uninstalled",
-                checked = guardActive,
-                enabled = !locked,
-                onChange = onGuardChange,
-            )
+            Column {
+                ToggleRow(
+                    title = "Hide from recent apps",
+                    detail = "Nothing to swipe away by accident. To lock unscroll against \"Clear all\" (ColorOS), turn this off, lock its recents card, then turn it back on",
+                    checked = settings.isOn(Toggle.HIDE_FROM_RECENTS),
+                    enabled = !locked,
+                    onChange = { onToggle(Toggle.HIDE_FROM_RECENTS, it) },
+                )
+                HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = Palette.Border, thickness = 0.5.dp)
+                ToggleRow(
+                    title = "Make uninstalling harder",
+                    detail = "Device admin must be turned off before unscroll can be uninstalled",
+                    checked = guardActive,
+                    enabled = !locked,
+                    onChange = onGuardChange,
+                )
+            }
         }
 
         Text(

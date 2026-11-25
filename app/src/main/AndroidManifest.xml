@@ -17,10 +17,9 @@
 
         <activity
             android:name=".MainActivity"
-            android:excludeFromRecents="true"
             android:exported="true">
-            <!-- Kept out of recents: on ColorOS/MIUI, swiping a recents card force-stops the
-                 whole app, accessibility service included. -->
+            <!-- Hidden from recents at runtime (MainActivity), per the "Hide from recent apps"
+                 setting: on ColorOS/MIUI, swiping a recents card force-stops the whole app. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

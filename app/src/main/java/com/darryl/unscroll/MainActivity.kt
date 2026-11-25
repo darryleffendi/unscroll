@@ -1,6 +1,7 @@
 package com.darryl.unscroll
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -14,6 +15,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +27,7 @@ import com.darryl.unscroll.data.SettingsRepository
 import com.darryl.unscroll.debug.CrashLog
 import com.darryl.unscroll.data.StoredState
 import com.darryl.unscroll.core.Settings
+import com.darryl.unscroll.core.Toggle
 import com.darryl.unscroll.service.ProtectionMonitor
 import com.darryl.unscroll.service.ServiceStatus
 import com.darryl.unscroll.ui.SettingsScreen
@@ -48,6 +51,14 @@ class MainActivity : ComponentActivity() {
         batteryUnrestricted = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
     }
 
+    /**
+     * Hide or show this task's recents card. Hidden, there's nothing to swipe away (a
+     * force-stop on ColorOS/MIUI); shown, the card can be locked against "Clear all".
+     */
+    private fun applyRecentsVisibility(hide: Boolean) {
+        getSystemService(ActivityManager::class.java).appTasks.forEach { it.setExcludeFromRecents(hide) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Always-dark UI: light status/navigation bar icons regardless of the system theme.
@@ -66,6 +77,8 @@ class MainActivity : ComponentActivity() {
             UnscrollTheme {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     val stored by repo.state.collectAsState(initial = StoredState(Settings.DEFAULT, null))
+                    val hideFromRecents = stored.settings.isOn(Toggle.HIDE_FROM_RECENTS)
+                    LaunchedEffect(hideFromRecents) { applyRecentsVisibility(hideFromRecents) }
                     val status by ServiceStatus.snapshot.collectAsState()
                     val scope = rememberCoroutineScope()
                     var lockError by remember { mutableStateOf<String?>(null) }

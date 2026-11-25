@@ -13,6 +13,7 @@
       "profile_tab": { "ids": ["profile_tab"] },
       "home_header": { "ids": ["action_bar_container"] },
       "home_logo": { "ids": ["title_logo"] },
+      "home_feed_list": { "ids": ["list"] },
       "stories_tray": { "ids": ["reels_tray_container", "tray_recycler_view", "stories_tray", "overlay_stories_tray_container"] },
       "story_viewer": { "ids": ["reel_viewer_root"] },
       "clips_pager": { "ids": ["clips_viewer_view_pager"] },
@@ -31,7 +32,8 @@
     "packages": ["com.google.android.youtube"],
     "selectors": {
       "pivot_bar": { "ids": ["pivot_bar"] },
-      "pivot_home": { "descs": ["Home"] },
+      "pivot_home": { "descs": ["Home", "Beranda"] },
+      "subs_tab": { "descs": ["Subs", "Subscriptions", "Langganan"], "texts": ["Subs", "Subscriptions", "Langganan"] },
       "pivot_shorts": { "descs": ["Shorts"] },
       "feed_tabs": { "ids": ["tabs_bar_view"] },
       "app_bar": { "ids": ["appbar_layout"] },

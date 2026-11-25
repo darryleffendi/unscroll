@@ -48,6 +48,8 @@ class AccessibilityUiNode(private val info: AccessibilityNodeInfo) : UiNode {
         return kids[index]
     }
 
+    override fun scrollBackward(): Boolean = info.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+
     override fun click(): Boolean {
         var node: AccessibilityNodeInfo? = info
         repeat(4) {

@@ -14,7 +14,9 @@ enum class Toggle(val key: String, val defaultOn: Boolean, val impliedBy: String
     YT_HIDE_UP_NEXT("yt_hide_up_next", true),
     TT_HIDE_FEEDS("tt_hide_feeds", true),
     X_HIDE_FOR_YOU("x_hide_for_you", true),
-    LI_HIDE_FEED("li_hide_feed", true);
+    LI_HIDE_FEED("li_hide_feed", true),
+    /** App-level, not a rule: keep the settings screen out of recent apps. */
+    HIDE_FROM_RECENTS("hide_from_recents", true);
 
     companion object {
         fun byKey(key: String) = entries.firstOrNull { it.key == key }

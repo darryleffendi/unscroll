@@ -15,8 +15,6 @@ import com.darryl.unscroll.core.isSelectedDeep
 
 class InstagramRules : AppRules {
     private val reelSession = SingleItemSession()
-    /** Remembered so tapping Home covers at once, before the stories tray has drawn. */
-    private var lastFeedTop: Int? = null
     private var lastTrayHeight = 0
     /** The header can drop out of the tree mid pull-to-refresh; the cap still needs it. */
     private var lastHeaderBottom: Int? = null
@@ -78,7 +76,7 @@ class InstagramRules : AppRules {
 
         val homeTab = ctx.find("home_tab")
         val homeSelected = homeTab?.isSelectedDeep() == true
-        if (homeSelected && (ctx.has("stories_tray") || ctx.has("home_logo"))) return decideHome(ctx, navTop)
+        if (homeSelected && (ctx.has("stories_tray") || ctx.has("home_logo") || ctx.has("home_feed_list"))) return decideHome(ctx, navTop)
         if (ctx.has("direct_inbox") || ctx.has("direct_thread")) return Decision(DIRECT, Action.Allow)
         if (ctx.has("profile")) return Decision(PROFILE, Action.Allow)
         if (ctx.has("search_field")) return Decision(SEARCH, Action.Allow)
@@ -115,17 +113,21 @@ class InstagramRules : AppRules {
         if (!s.isOn(Toggle.IG_HIDE_FEED)) return Decision(HOME, Action.Allow)
 
         val tray = ctx.find("stories_tray")
-        val top = when {
-            tray != null -> {
-                lastTrayHeight = tray.bounds.height
-                // Cap at header + tray height so a pull-to-refresh never exposes a post.
-                val cap = headerBottom?.let { it + lastTrayHeight } ?: tray.bounds.bottom
-                minOf(tray.bounds.bottom, cap)
-            }
-            headerBottom != null -> lastFeedTop?.coerceAtMost(headerBottom + lastTrayHeight) ?: headerBottom
-            else -> lastFeedTop ?: ctx.screen.top
+        // A sliver of tray left at the top counts as gone: the stories aren't usable.
+        val trayHidden = tray == null || tray.bounds.height < maxOf(MIN_TRAY_HEIGHT, lastTrayHeight / 2)
+        if (trayHidden) {
+            // The feed was scrolled from the (uncovered) stories tray and the tray is gone:
+            // cover everything below whatever header is still visible, and scroll the feed
+            // back to the top so the stories return.
+            val top = maxOf(header?.bounds?.bottom ?: ctx.safeTop, ctx.safeTop)
+            val list = ctx.find("home_feed_list")?.takeIf { it.isScrollable }
+            val band = Geometry.band(ctx.screen, top, navTop) ?: return Decision(HOME, Action.Allow)
+            return Decision(HOME, Action.Cover(band, "Feed is hidden. Back to stories…", scrollBack = list))
         }
-        lastFeedTop = top
+        lastTrayHeight = maxOf(lastTrayHeight, tray!!.bounds.height)
+        // Cap at header + tray height so a pull-to-refresh never exposes a post.
+        val cap = headerBottom?.let { it + lastTrayHeight } ?: tray.bounds.bottom
+        val top = minOf(tray.bounds.bottom, cap)
         return Decision(HOME, cover(ctx, top, navTop, "Feed is hidden. Stories stay above."))
     }
 
@@ -164,6 +166,7 @@ class InstagramRules : AppRules {
         const val PROFILE = "IG_PROFILE"
 
         const val REDIRECT_WINDOW_MS = 8_000L
+        private const val MIN_TRAY_HEIGHT = 120
         const val REDIRECT_RETRY_MS = 600L
         const val MAX_REDIRECT_ATTEMPTS = 3
     }
