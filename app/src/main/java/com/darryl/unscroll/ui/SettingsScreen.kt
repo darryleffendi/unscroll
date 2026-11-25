@@ -40,8 +40,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -96,6 +98,8 @@ fun SettingsScreen(
     onOpenAccessibility: () -> Unit,
     guardActive: Boolean,
     onGuardChange: (Boolean) -> Unit,
+    lastError: String?,
+    onClearError: () -> Unit,
 ) {
     val protecting = status.connected || serviceEnabled
     Column(
@@ -109,6 +113,7 @@ fun SettingsScreen(
     ) {
         Header(protecting)
         StatusCard(protecting, status, onOpenAccessibility)
+        lastError?.let { ErrorCard(it, onClearError) }
         LockCard(locked, onLock, onUnlock, lockError)
 
         SectionLabel("Apps")
@@ -207,6 +212,50 @@ private fun StatusCard(on: Boolean, status: ServiceStatus.Snapshot, onOpenAccess
             }
         }
     }
+}
+
+@Composable
+private fun ErrorCard(report: String, onClear: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    Panel(highlight = Palette.Red) {
+        Column(Modifier.padding(18.dp)) {
+            Text("Something went wrong", color = Palette.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("Copy this report and send it over. It stays on this phone otherwise.", color = Palette.Muted, fontSize = 13.sp)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                report.lines().take(14).joinToString("\n"),
+                color = Palette.Muted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Palette.SurfaceRaised).padding(12.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton(if (copied) "Copied" else "Copy report", primary = true) {
+                    clipboard.setText(AnnotatedString(report))
+                    copied = true
+                }
+                PillButton("Clear", primary = false, onClick = onClear)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PillButton(label: String, primary: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (primary) Color(0xFF1A0F0B) else Palette.Ink,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (primary) Palette.Accent else Brush.linearGradient(listOf(Palette.SurfaceRaised, Palette.SurfaceRaised)))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    )
 }
 
 @Composable

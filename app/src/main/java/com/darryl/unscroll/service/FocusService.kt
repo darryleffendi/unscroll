@@ -25,6 +25,7 @@ import com.darryl.unscroll.core.Settings
 import com.darryl.unscroll.core.Toggle
 import com.darryl.unscroll.core.UiNode
 import com.darryl.unscroll.data.SettingsRepository
+import com.darryl.unscroll.debug.CrashLog
 import com.darryl.unscroll.debug.TreeDumper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,33 +64,49 @@ class FocusService : AccessibilityService() {
 
     private val evaluateTask = Runnable {
         evaluateScheduled = false
-        evaluate()
+        safeEvaluate()
     }
 
     /** Re-checks once a second while one of the apps is in front, to catch leaving it without events. */
     private val watchdog = object : Runnable {
         override fun run() {
             if (foregroundPkg == null) return
-            evaluate()
+            safeEvaluate()
             handler.postDelayed(this, WATCHDOG_MS)
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        curtain = CurtainController(this)
-        selectors = Selectors.parse(assets.open("selectors.json").bufferedReader().use { it.readText() })
-        SettingsRepository(this).state.onEach {
-            settings = it.settings
-            schedule(0)
-        }.launchIn(scope)
-        ServiceStatus.connected(true)
-        ProtectionMonitor.cancel(this)
-        Log.i(TAG, "service connected")
-        if (BuildConfig.DEBUG) registerDumpReceiver()
+        try {
+            curtain = CurtainController(this)
+            selectors = Selectors.parse(assets.open("selectors.json").bufferedReader().use { it.readText() })
+            SettingsRepository(this).state.onEach {
+                settings = it.settings
+                schedule(0)
+            }.launchIn(scope)
+            ServiceStatus.connected(true)
+            ProtectionMonitor.cancel(this)
+            Log.i(TAG, "service connected")
+            if (BuildConfig.DEBUG) registerDumpReceiver()
+        } catch (e: Throwable) {
+            Log.e(TAG, "startup failed", e)
+            CrashLog.record(this, "service startup", e)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (!::curtain.isInitialized || !::selectors.isInitialized) return
+        try {
+            handleEvent(event)
+        } catch (e: RuntimeException) {
+            // OEM builds can throw from node access (e.g. SecurityException); never crash the service.
+            Log.w(TAG, "event failed", e)
+            CrashLog.record(this, "event handling", e)
+        }
+    }
+
+    private fun handleEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (pkg in TARGET_PACKAGES) {
@@ -144,6 +161,17 @@ class FocusService : AccessibilityService() {
         } else if (!evaluateScheduled) {
             evaluateScheduled = true
             handler.postDelayed(evaluateTask, delayMs)
+        }
+    }
+
+    private fun safeEvaluate() {
+        if (!::curtain.isInitialized || !::selectors.isInitialized) return
+        try {
+            evaluate()
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "evaluate failed", e)
+            CrashLog.record(this, "screen check", e)
+            curtain.hide()
         }
     }
 
