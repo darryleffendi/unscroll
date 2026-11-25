@@ -6,4 +6,6 @@
     <string name="channel_protection">Protection status</string>
     <string name="protection_off_title">Protection is not running</string>
     <string name="protection_off_text">Feeds and Reels are visible again. Tap to turn unscroll back on.</string>
+    <string name="admin_explanation">unscroll asks for no device admin powers. While this is on, uninstalling unscroll first needs admin turned off here, an extra step against impulse uninstalls.</string>
+    <string name="admin_disable_warning">Turning this off lets unscroll be uninstalled in one tap.</string>
 </resources>

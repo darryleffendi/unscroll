@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import com.darryl.unscroll.admin.UninstallGuard
 import com.darryl.unscroll.data.SettingsRepository
 import com.darryl.unscroll.data.StoredState
 import com.darryl.unscroll.core.Settings
@@ -34,10 +35,12 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     /** Whether the service is switched on in Accessibility settings, refreshed on resume. */
     private var serviceEnabled by mutableStateOf(false)
+    private var guardActive by mutableStateOf(false)
 
     override fun onResume() {
         super.onResume()
         serviceEnabled = ProtectionMonitor.isEnabled(this)
+        guardActive = UninstallGuard.isActive(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +79,11 @@ class MainActivity : ComponentActivity() {
                         },
                         lockError = lockError,
                         onOpenAccessibility = { startActivity(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                        guardActive = guardActive,
+                        onGuardChange = { on ->
+                            if (on) startActivity(UninstallGuard.enableIntent(this))
+                            else { UninstallGuard.deactivate(this); guardActive = false }
+                        },
                     )
                 }
             }

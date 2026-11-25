@@ -75,6 +75,8 @@ fun SettingsScreen(
     onUnlock: (String) -> Unit,
     lockError: String?,
     onOpenAccessibility: () -> Unit,
+    guardActive: Boolean,
+    onGuardChange: (Boolean) -> Unit,
 ) {
     Column(
         Modifier
@@ -108,6 +110,18 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Extra friction", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                ToggleRow(
+                    label = "Make uninstalling harder — needs device admin turned off first",
+                    checked = guardActive,
+                    enabled = !locked,
+                    hint = null,
+                    onChange = onGuardChange,
+                )
             }
         }
         Text(
